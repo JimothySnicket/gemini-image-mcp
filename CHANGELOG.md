@@ -2,6 +2,18 @@
 
 All notable changes to this project are documented here. Every completed task gets an entry, even minor ones.
 
+## [0.2.0] - Planned
+
+Design spec written: `docs/superpowers/specs/2026-04-01-v02-features-design.md`
+
+- Output organization: `filename` param with auto-versioning (hero-banner.png, hero-banner-v2.png), `subfolder` param
+- Generation manifest: `generations.jsonl` append-only log of all generations with prompts, params, cost
+- Session tracking: running totals (generations, cost) returned in every response
+- Rate limiting: `MAX_REQUESTS_PER_HOUR`, `MAX_COST_PER_HOUR` env vars with clear error messages
+- Multi-turn editing: `sessionId` param, server-managed conversation history, thoughtSignature preservation
+- Seed parameter: reproducible generation
+- Google Search grounding: `useSearchGrounding` param for real-world accuracy
+
 ## [0.1.0] - 2026-04-01
 
 ### Added (post-test)
