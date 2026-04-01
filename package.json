@@ -1,14 +1,18 @@
 {
   "name": "gemini-image-mcp",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "description": "MCP server for Google Gemini image generation and editing",
   "type": "module",
   "main": "dist/index.js",
   "bin": {
     "gemini-image-mcp": "dist/index.js"
   },
+  "engines": {
+    "node": ">=18.0.0"
+  },
   "scripts": {
     "build": "tsc",
+    "prepublishOnly": "tsc",
     "dev": "bun run src/index.ts",
     "start": "node dist/index.js"
   },
@@ -23,6 +27,7 @@
   "dependencies": {
     "@google/genai": "^1.44.0",
     "@modelcontextprotocol/sdk": "^1.22.0",
+    "sharp": "^0.34.5",
     "zod": "^3.24.0"
   },
   "devDependencies": {

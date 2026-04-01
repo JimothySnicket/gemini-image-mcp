@@ -3,6 +3,7 @@ import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { StdioServerTransport } from "@modelcontextprotocol/sdk/server/stdio.js";
 import { z } from "zod/v4";
 import { discoverModels, generateImage, getAvailableModels } from "./generate.js";
+import { processImage } from "./process.js";
 import { log } from "./utils.js";
 
 const server = new McpServer({
@@ -107,6 +108,97 @@ server.registerTool(
       if (err instanceof Error && err.stack) {
         log.debug("Stack trace:", err.stack);
       }
+      return {
+        content: [{ type: "text" as const, text: `Error: ${message}` }],
+        isError: true,
+      };
+    }
+  },
+);
+
+server.registerTool(
+  "process_image",
+  {
+    title: "Process Image",
+    description:
+      "Process an existing image locally using sharp. Crop, resize, remove background, " +
+      "convert format, or trim whitespace. Free, fast, no API calls. " +
+      "For AI-powered editing (style changes, complex background removal), use generate_image with the image as input instead.",
+    inputSchema: {
+      imagePath: z.string().describe("Path to the image file to process"),
+      crop: z
+        .optional(
+          z.object({
+            width: z.number().int().describe("Crop width in pixels"),
+            height: z.number().int().describe("Crop height in pixels"),
+            left: z.optional(z.number().int()).describe("Crop X offset (default 0)"),
+            top: z.optional(z.number().int()).describe("Crop Y offset (default 0)"),
+          }),
+        )
+        .describe("Crop to specific dimensions"),
+      resize: z
+        .optional(
+          z.object({
+            width: z.optional(z.number().int()).describe("Target width (maintains aspect if height omitted)"),
+            height: z.optional(z.number().int()).describe("Target height (maintains aspect if width omitted)"),
+          }),
+        )
+        .describe("Resize image. Maintains aspect ratio if only width or height given."),
+      removeBackground: z
+        .optional(
+          z.object({
+            threshold: z.optional(z.number().int().min(0).max(255)).describe(
+              "Brightness threshold (0-255). Pixels above this become transparent. Default 240.",
+            ),
+          }),
+        )
+        .describe("Remove near-white background (threshold-based). For complex backgrounds, use generate_image with AI editing."),
+      trim: z
+        .optional(z.boolean())
+        .describe("Auto-trim whitespace borders"),
+      format: z
+        .optional(z.enum(["png", "jpeg", "webp"]))
+        .describe("Convert to format. Defaults to original format."),
+      quality: z
+        .optional(z.number().int().min(1).max(100))
+        .describe("Output quality for JPEG/WebP (1-100). Default 90."),
+      outputDir: z
+        .optional(z.string())
+        .describe("Directory to save. Defaults to OUTPUT_DIR env var or ~/gemini-images"),
+      filename: z
+        .optional(z.string())
+        .describe("Base name for saved file. Auto-versioned if duplicate."),
+      subfolder: z
+        .optional(z.string())
+        .describe("Subfolder within output directory"),
+    },
+  },
+  async (args) => {
+    try {
+      const result = await processImage({
+        imagePath: args.imagePath,
+        crop: args.crop,
+        resize: args.resize,
+        removeBackground: args.removeBackground,
+        trim: args.trim,
+        format: args.format,
+        quality: args.quality,
+        outputDir: args.outputDir,
+        filename: args.filename,
+        subfolder: args.subfolder,
+      });
+
+      return {
+        content: [
+          {
+            type: "text" as const,
+            text: JSON.stringify(result, null, 2),
+          },
+        ],
+      };
+    } catch (err) {
+      const message = err instanceof Error ? err.message : String(err);
+      log.error("process_image failed:", message);
       return {
         content: [{ type: "text" as const, text: `Error: ${message}` }],
         isError: true,
