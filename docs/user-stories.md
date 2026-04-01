@@ -181,5 +181,7 @@ Results are appended here as tests are run. Format:
 3. **Prompt sensitivity for editing**: Avoid "crop/resize" language. Use "recreate/reimagine" to ensure image output.
 4. **Cost range**: $0.04 (flash 1K) to $0.26 (pro 4K) per image. 6.7x cost difference at the extremes.
 5. **Response time**: Flash ~6s, Pro ~16s per generation.
-6. **Pro model returns JPEG**: gemini-3-pro-image-preview returns image/jpeg, flash returns image/png. Filename is always .png — **bug: should use correct extension.**
+6. **Pro model returns JPEG**: gemini-3-pro-image-preview returns image/jpeg, flash returns image/png. ~~Filename is always .png — **bug: should use correct extension.**~~ **FIXED**: extension now matches mime type.
 7. **personGeneration**: Not supported on Gemini API (Vertex AI only). Removed from tool.
+8. **Model discovery**: 6 image models found at startup (3 Gemini native, 3 Imagen 4). Imagen models use a different API — would fail gracefully if used.
+9. **Safety filter**: Blocked prompts now return the model's actual refusal text. Previously gave generic "no image returned" error.

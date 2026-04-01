@@ -10,6 +10,13 @@ All notable changes to this project are documented here. Every completed task ge
 - New models appear automatically on next server restart — no code changes needed
 - Discovery failure is non-fatal: server starts anyway, errors surface on first request
 
+### Verified (post-restart 2026-04-01)
+- Model discovery: found 6 image models including 3 Gemini native + 3 Imagen 4. Startup in ~200ms.
+- Note: Imagen 4 models (`imagen-4.0-*`) appear in discovery but use a different API (`generateImages`). Will fail gracefully if used — could filter these out in future.
+- File extension fix verified: gemini-3-pro saves as `.jpg`, flash saves as `.png`
+- Safety filter fix verified: blocked prompts now return the model's actual refusal text instead of generic "no image returned"
+- personGeneration removed from tool schema confirmed
+
 ### Added
 - Project initialised: TypeScript + Bun + `@google/genai` v1.47.0 + `@modelcontextprotocol/sdk` v1.29.0
 - Single `generate_image` tool with parameter-driven routing (text-to-image or image editing based on inputs)
