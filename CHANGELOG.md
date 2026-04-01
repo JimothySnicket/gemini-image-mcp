@@ -5,7 +5,13 @@ All notable changes to this project are documented here. Every completed task ge
 ## [0.2.0] - 2026-04-01
 
 ### Added
-- `process_image` tool: local image processing via sharp (crop, resize, remove background, trim, format conversion). Free, fast, no API calls.
+- `process_image` tool: local image processing via sharp. Free, fast, no API calls.
+  - Crop: pixel-exact, aspect ratio (center), or focal point (attention/entropy strategies)
+  - Resize: width, height, or both with aspect ratio preservation
+  - Background removal: threshold-based, near-white pixels to transparent
+  - Trim: auto-remove whitespace/transparent borders
+  - Format conversion: PNG, JPEG, WebP with quality control
+  - Operations chain in a single call (e.g. removeBackground + trim + resize for favicon pipeline)
 - `filename` param: meaningful file names with auto-versioning (hero.png, hero-v2.png, hero-v3.png)
 - `subfolder` param: organize output into subdirectories (e.g. `landing-page/hero.png`)
 - `generations.jsonl` manifest: append-only log of every generation (prompt, params, model, cost, path)

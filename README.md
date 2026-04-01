@@ -1,16 +1,32 @@
 # gemini-image-mcp
 
-MCP server for Google Gemini image generation and editing. One tool, no bloat.
+MCP server for Google Gemini image generation, editing, and processing. Two tools, no bloat.
 
 Built on Gemini's native image generation API (`generateContent`), not the deprecated Imagen API. If you're migrating from Imagen (shutting down June 2026), this is what you move to — multi-turn editing, reference images, and all the features Imagen didn't have.
 
 ## Features
 
+### generate_image — AI-powered
 - **Text-to-image** — describe what you want, get an image
 - **Image editing** — provide reference images and an editing instruction
+- **Multi-turn sessions** — iteratively refine images with conversation history
 - **Multi-image input** — up to 14 reference images on gemini-3-pro
-- **Cost reporting** — every response includes token counts and estimated USD cost
-- **Auto model discovery** — detects available models from your API key at startup
+- **Cost reporting** — every response includes token counts, estimated USD cost, and session totals
+- **Rate limiting** — configurable per-hour caps on requests and cost to prevent runaway agents
+- **Auto model discovery** — detects available image models from your API key at startup
+- **Seed** — reproducible generation with integer seeds
+- **Google Search grounding** — real-world accuracy on gemini-3.1-flash
+
+### process_image — Local (free, no API calls)
+- **Crop** — pixel-exact, aspect ratio (center), or focal point (attention/entropy)
+- **Resize** — to width, height, or both (maintains aspect ratio)
+- **Background removal** — threshold-based, makes near-white pixels transparent
+- **Trim** — auto-remove whitespace borders
+- **Format conversion** — PNG, JPEG, WebP with quality control
+
+### Both tools
+- **Output organization** — meaningful filenames with auto-versioning, subfolders
+- **Generation manifest** — `generations.jsonl` logs every generation with prompt, params, cost
 - **Full aspect ratio support** — 1:1, 16:9, 9:16, 3:2, 2:3, 4:3, 3:4, 21:9
 - **Resolution control** — 1K, 2K, 4K
 
@@ -197,6 +213,58 @@ Set these the same way as `GEMINI_API_KEY`, or pass them in the `env` block of y
 
 **High quality:**
 > "A photorealistic product shot of headphones on marble, 4K" (using gemini-3-pro-image-preview)
+
+## Tool: `process_image`
+
+Local image processing via sharp. Free, fast, no API calls.
+
+### Parameters
+
+| Parameter | Required | Description |
+|-----------|----------|-------------|
+| `imagePath` | Yes | Path to the image file to process |
+| `crop` | No | Crop by pixel dimensions, aspect ratio, or focal point strategy |
+| `resize` | No | Resize to width/height (maintains aspect ratio) |
+| `removeBackground` | No | Make near-white pixels transparent (threshold-based) |
+| `trim` | No | Auto-remove whitespace/transparent borders |
+| `format` | No | Convert to `png`, `jpeg`, or `webp` |
+| `quality` | No | Output quality for JPEG/WebP (1-100) |
+| `filename` | No | Base name for saved file. Auto-versioned if duplicate. |
+| `subfolder` | No | Subfolder within output directory |
+| `outputDir` | No | Override output directory |
+
+### Crop Options
+
+```json
+// Pixel-exact
+{"width": 500, "height": 300, "left": 100, "top": 50}
+
+// Aspect ratio (center crop)
+{"aspectRatio": "16:9"}
+
+// Focal point — shifts crop to the most interesting region
+{"aspectRatio": "16:9", "strategy": "attention"}
+
+// Detail-based — shifts crop to the most detailed region
+{"aspectRatio": "16:9", "strategy": "entropy"}
+```
+
+### Common Pipelines
+
+**Favicon from a generated logo:**
+```
+process_image → removeBackground + trim + resize {width: 192, height: 192}
+```
+
+**Social card from a photo:**
+```
+process_image → crop {aspectRatio: "16:9", strategy: "attention"} + resize {width: 1200}
+```
+
+**WebP conversion for web:**
+```
+process_image → format: "webp" + quality: 85
+```
 
 ## Models
 

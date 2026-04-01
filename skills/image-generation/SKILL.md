@@ -56,6 +56,46 @@ This preserves the conversation history so the model remembers what it generated
 - Duplicate filenames are auto-versioned: `hero.png`, `hero-v2.png`, `hero-v3.png`
 - When generating assets for a project, save them directly to the project's asset directory using `outputDir`
 
+## Image Processing (process_image)
+
+Use `process_image` for local, free operations that don't need AI:
+
+### Common Pipelines
+
+**Favicon/icon from a logo:**
+```json
+{
+  "imagePath": "./logo.png",
+  "removeBackground": {"threshold": 230},
+  "trim": true,
+  "resize": {"width": 192, "height": 192},
+  "filename": "favicon-192"
+}
+```
+
+**Crop to aspect ratio:**
+```json
+{
+  "imagePath": "./photo.png",
+  "crop": {"aspectRatio": "16:9", "strategy": "attention"},
+  "filename": "hero-banner"
+}
+```
+Strategies: `center` (default, crops from center), `attention` (shifts crop toward the most visually interesting region), `entropy` (shifts toward the most detailed region). These control the focal point — not content detection.
+
+**Convert for web:**
+```json
+{
+  "imagePath": "./image.png",
+  "format": "webp",
+  "quality": 85
+}
+```
+
+### When to use which tool
+- **process_image** — crop, resize, format convert, threshold bg removal, trim. Free and instant.
+- **generate_image with images** — AI-powered editing: style changes, complex background removal, content-aware modifications. Costs ~$0.04 per operation.
+
 ## Prompt Tips
 
 Structure prompts as: **[Style] [Subject] [Composition] [Context/Atmosphere]**

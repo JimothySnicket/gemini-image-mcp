@@ -17,7 +17,7 @@ One tool, parameter-driven routing. The behaviour changes based on what inputs a
 | `model` | No | string | `gemini-2.5-flash-image` | Gemini model ID |
 | `aspectRatio` | No | string | `1:1` | `1:1`, `16:9`, `9:16`, `3:2`, `2:3`, `4:3`, `3:4`, `21:9` |
 | `resolution` | No | string | `1K` | `1K`, `2K`, `4K` |
-| `personGeneration` | No | string | — | `ALLOW_ALL`, `ALLOW_ADULT`, `ALLOW_NONE` |
+| `personGeneration` | ~~No~~ | ~~string~~ | — | **REMOVED** — Vertex AI only, Gemini API rejects it |
 | `outputDir` | No | string | `OUTPUT_DIR` env or `~/gemini-images` | Where to save the generated image |
 
 ### Routing Logic
@@ -139,8 +139,9 @@ Pricing is maintained as a simple lookup object in `pricing.ts`, keyed by model 
 - Default location: `OUTPUT_DIR` env var, falling back to `~/gemini-images/`
 - Per-request override via `outputDir` parameter
 - Directory created automatically if it doesn't exist
-- Filename format: `gemini-{timestamp}-{short-hash}.png`
-- All output is PNG (that's what Gemini returns)
+- Filename: `gemini-{timestamp}-{short-hash}.{ext}` by default, or user-specified with auto-versioning
+- Extension matches mime type (flash returns PNG, pro returns JPEG)
+- Subfolder support for organized output
 
 ## Distribution
 
@@ -158,26 +159,30 @@ Pricing is maintained as a simple lookup object in `pricing.ts`, keyed by model 
 ## Tech Stack
 
 - **Language:** TypeScript
-- **Runtime:** Bun
+- **Runtime:** Bun / Node.js >=18
 - **SDK:** `@google/genai` (Google's official Gemini SDK)
 - **MCP:** `@modelcontextprotocol/sdk`
+- **Image Processing:** `sharp`
 - **Validation:** Zod
 
-## Future (Post-MVP)
+## Implemented (was Future/Post-MVP)
 
-- Multi-turn editing sessions via `sessionId` parameter (server-managed conversation history, `thoughtSignature` preservation)
-- Dynamic tool registration (`notifications/tools/list_changed`) if tool count grows
-- Automated pricing lookup
-- Model discovery from API key (list available models at startup)
+- ~~Multi-turn editing sessions~~ — DONE: `sessionId` param, thoughtSignature preservation, 30min expiry
+- ~~Model discovery from API key~~ — DONE: `models.list` at startup, Imagen filtered out
+- Dynamic tool registration — not needed (2 tools, ~400 tokens total)
+- Automated pricing lookup — deferred (manual table works, cost estimate included)
 
 ## Competitive Position
 
 | Feature | RLabs | mintmcqueen | guinacio | **This** |
 |---------|-------|-------------|----------|----------|
-| Tool count | 37 | 14 | 1 | **1** |
+| Tool count | 37 | 14 | 1 | **2** |
 | Image generation | Yes | Yes | Yes | **Yes** |
-| Image input/editing | Session-based | Single input | No | **Multi-image input** |
-| Cost reporting | No | No | No | **Yes** |
-| Correct API usage | Unknown | Stale | Basic | **Verified** |
-| Context cost | ~5000-9000 tokens | ~2000 tokens | ~200 tokens | **~200 tokens** |
+| Image input/editing | Session-based | Single input | No | **Multi-image + sessions** |
+| Local processing | No | No | No | **Yes (sharp)** |
+| Cost reporting | No | No | No | **Yes + session totals** |
+| Rate limiting | No | No | No | **Yes** |
+| Auto model discovery | No | No | No | **Yes** |
+| Correct API usage | Unknown | Stale | Basic | **Verified + tested** |
+| Context cost | ~5000-9000 tokens | ~2000 tokens | ~200 tokens | **~400 tokens** |
 | Active | Yes | No (Nov 2025) | Yes | **Yes** |
