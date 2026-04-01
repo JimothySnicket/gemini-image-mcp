@@ -5,7 +5,14 @@ import { log, resolveOutputDir, saveImage } from "./utils.js";
 
 export interface ProcessImageParams {
   imagePath: string;
-  crop?: { width: number; height: number; left?: number; top?: number };
+  crop?: {
+    width?: number;
+    height?: number;
+    left?: number;
+    top?: number;
+    aspectRatio?: string;
+    strategy?: "center" | "attention" | "entropy";
+  };
   resize?: { width?: number; height?: number };
   removeBackground?: { threshold?: number };
   trim?: boolean;
@@ -79,13 +86,57 @@ export async function processImage(
   }
 
   if (params.crop) {
-    pipeline = pipeline.extract({
-      left: params.crop.left ?? 0,
-      top: params.crop.top ?? 0,
-      width: params.crop.width,
-      height: params.crop.height,
-    });
-    operations.push(`crop(${params.crop.width}x${params.crop.height})`);
+    const imgW = metadata.width ?? 0;
+    const imgH = metadata.height ?? 0;
+
+    if (params.crop.aspectRatio) {
+      // Parse aspect ratio string like "16:9"
+      const [aw, ah] = params.crop.aspectRatio.split(":").map(Number);
+      if (!aw || !ah) throw new Error(`Invalid aspect ratio: ${params.crop.aspectRatio}`);
+
+      const strategy = params.crop.strategy ?? "center";
+
+      if (strategy === "attention" || strategy === "entropy") {
+        // Smart crop: let sharp find the interesting region
+        const fit = strategy === "attention" ? sharp.strategy.attention : sharp.strategy.entropy;
+        // Calculate target dimensions that fit within the image at the desired ratio
+        const targetW = Math.min(imgW, Math.round(imgH * (aw / ah)));
+        const targetH = Math.min(imgH, Math.round(imgW * (ah / aw)));
+        pipeline = pipeline.resize({
+          width: targetW,
+          height: targetH,
+          fit: "cover",
+          position: fit,
+        });
+        operations.push(`crop(${params.crop.aspectRatio},${strategy})`);
+      } else {
+        // Center crop to aspect ratio
+        let cropW: number;
+        let cropH: number;
+        if (imgW / imgH > aw / ah) {
+          cropH = imgH;
+          cropW = Math.round(imgH * (aw / ah));
+        } else {
+          cropW = imgW;
+          cropH = Math.round(imgW * (ah / aw));
+        }
+        const left = Math.round((imgW - cropW) / 2);
+        const top = Math.round((imgH - cropH) / 2);
+        pipeline = pipeline.extract({ left, top, width: cropW, height: cropH });
+        operations.push(`crop(${params.crop.aspectRatio},center,${cropW}x${cropH})`);
+      }
+    } else if (params.crop.width && params.crop.height) {
+      // Pixel-exact crop
+      pipeline = pipeline.extract({
+        left: params.crop.left ?? 0,
+        top: params.crop.top ?? 0,
+        width: params.crop.width,
+        height: params.crop.height,
+      });
+      operations.push(`crop(${params.crop.width}x${params.crop.height})`);
+    } else {
+      throw new Error("Crop requires either aspectRatio or both width and height.");
+    }
   }
 
   if (params.resize) {

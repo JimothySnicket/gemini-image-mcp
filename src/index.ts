@@ -129,13 +129,20 @@ server.registerTool(
       crop: z
         .optional(
           z.object({
-            width: z.number().int().describe("Crop width in pixels"),
-            height: z.number().int().describe("Crop height in pixels"),
+            width: z.optional(z.number().int()).describe("Crop width in pixels"),
+            height: z.optional(z.number().int()).describe("Crop height in pixels"),
             left: z.optional(z.number().int()).describe("Crop X offset (default 0)"),
             top: z.optional(z.number().int()).describe("Crop Y offset (default 0)"),
+            aspectRatio: z.optional(z.string()).describe(
+              "Crop to aspect ratio (e.g. '16:9', '1:1'). Calculates dimensions automatically.",
+            ),
+            strategy: z.optional(z.enum(["center", "attention", "entropy"])).describe(
+              "Crop strategy when using aspectRatio. 'center' crops from center (default). " +
+                "'attention' finds the most visually interesting region. 'entropy' finds the most detailed region.",
+            ),
           }),
         )
-        .describe("Crop to specific dimensions"),
+        .describe("Crop image. Use width+height for pixel-exact, or aspectRatio for ratio-based. Strategy controls where to crop from."),
       resize: z
         .optional(
           z.object({
