@@ -7,6 +7,14 @@
   "bin": {
     "gemini-image-mcp": "dist/index.js"
   },
+  "files": [
+    "dist",
+    "plugin.json",
+    "skills",
+    "README.md",
+    "LICENSE",
+    "CHANGELOG.md"
+  ],
   "engines": {
     "node": ">=18.0.0"
   },
@@ -23,7 +31,16 @@
     "google",
     "ai"
   ],
+  "author": "Jamie Donaldson",
   "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/JimothySnicket/gemini-image-mcp.git"
+  },
+  "homepage": "https://github.com/JimothySnicket/gemini-image-mcp",
+  "bugs": {
+    "url": "https://github.com/JimothySnicket/gemini-image-mcp/issues"
+  },
   "dependencies": {
     "@google/genai": "^1.44.0",
     "@modelcontextprotocol/sdk": "^1.22.0",
