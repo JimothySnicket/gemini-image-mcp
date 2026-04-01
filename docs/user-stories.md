@@ -255,9 +255,25 @@ Results are appended here as tests are run. Format:
 
 **Prompt Sensitivity Findings**
 
-Phrases that can trigger text-only responses (no image):
+Phrases that previously triggered text-only responses (no image):
 - "A set of..." — model describes instead of drawing
 - "Crop this..." — model explains cropping instead of generating
 - Any list-like instruction ("circles, rectangles, triangles")
+- "Generate an image: " prefix could *cause* failures ("Sure, here's an image..." then text-only)
 
-Fix: prefix with "Generate an image of..." or "Draw..." to force image output.
+~~Fix: prefix with "Generate an image of..." or "Draw..." to force image output.~~
+
+**Actual fix (v0.2):** Use `responseModalities: ['IMAGE']` for single-shot generation. Model has no choice but to generate an image. Sessions use `['TEXT', 'IMAGE']` to preserve thoughtSignature.
+
+### Run: 2026-04-01 — IMAGE-only Mode Validation
+
+| Prompt | Before (TEXT+IMAGE) | After (IMAGE-only) |
+|--------|--------------------|--------------------|
+| "A set of flat geometric shapes..." | FAIL (text-only) | **PASS** |
+| "Generate an image: List of 5 button styles" | FAIL (text-only: "Sure, here's...") | **PASS** |
+| "List of 5 button styles" (no prefix) | Inconsistent | **PASS** |
+| Safety filter prompt | Generic fallback | Same (empty response, correct) |
+| Multi-turn session (turn 1: house) | PASS | PASS (IMAGE-only) |
+| Multi-turn session (turn 2: add garden) | PASS | PASS (TEXT+IMAGE, preserved style + added garden) |
+
+**Conclusion:** IMAGE-only mode eliminates all text-only failures. Prompt prefixing is NOT needed and can be counterproductive. Sessions correctly switch to TEXT+IMAGE for thoughtSignature preservation.

@@ -26,6 +26,10 @@ All notable changes to this project are documented here. Every completed task ge
 - Updated SKILL.md with multi-turn, output organization, cost/model guidance
 - Updated README with rate limiting, new params, example response with session stats
 
+### Changed
+- Single-shot generation uses `responseModalities: ['IMAGE']` instead of `['TEXT', 'IMAGE']`. Eliminates all text-only failures. Sessions still use `['TEXT', 'IMAGE']` for thoughtSignature preservation.
+- Prompt prefixing confirmed unnecessary and potentially harmful — removed from guidance
+
 ### Tested — v0.2 (2026-04-01)
 - Filename param: `logo.png` saved correctly
 - Auto-versioning: second `logo` saved as `logo-v2.png`
