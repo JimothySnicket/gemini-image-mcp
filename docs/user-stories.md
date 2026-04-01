@@ -183,5 +183,28 @@ Results are appended here as tests are run. Format:
 5. **Response time**: Flash ~6s, Pro ~16s per generation.
 6. **Pro model returns JPEG**: gemini-3-pro-image-preview returns image/jpeg, flash returns image/png. ~~Filename is always .png — **bug: should use correct extension.**~~ **FIXED**: extension now matches mime type.
 7. **personGeneration**: Not supported on Gemini API (Vertex AI only). Removed from tool.
-8. **Model discovery**: 6 image models found at startup (3 Gemini native, 3 Imagen 4). Imagen models use a different API — would fail gracefully if used.
+8. **Model discovery**: 6 image models found at startup (3 Gemini native, 3 Imagen 4). Imagen models use a different API — would fail gracefully if used. Later filtered to 3 Gemini native only.
 9. **Safety filter**: Blocked prompts now return the model's actual refusal text. Previously gave generic "no image returned" error.
+
+### Run: 2026-04-01 — v0.2 Feature Tests
+
+| Feature | Result | Notes |
+|---------|--------|-------|
+| Filename param | PASS | `logo.png` saved with correct name instead of `gemini-{hash}.png` |
+| Auto-versioning | PASS | Second `logo` saved as `logo-v2.png` automatically |
+| Subfolder | PASS | `test-v02/` directory created automatically |
+| Session tracking | PASS | Running count (5 gens) and cost ($0.20) in every response |
+| Manifest (JSONL) | PASS | All 5 generations logged to `generations.jsonl` with prompt, model, cost, path |
+| Multi-turn session (turn 1) | PASS | Coffee shop logo generated, sessionId returned |
+| Multi-turn session (turn 2) | PASS | "Make it B&W" — model remembered original design, converted correctly. Prompt tokens 10→294 (history replayed with thoughtSignature) |
+| Seed param | PASS | Accepted and passed through without error |
+| Rate limit warning | PASS | Startup log shows "none configured" message with env var names |
+| Imagen filtered | PASS | Discovery shows 3 models (was 6 before filtering) |
+
+### v0.2 Key Findings
+
+1. **Multi-turn sessions work excellently** — the model preserved the exact design ("The Daily Grind Coffee Roasters") across turns while applying the edit instruction
+2. **Auto-versioning is seamless** — no errors, no overwrites, predictable naming
+3. **Manifest is comprehensive** — every field logged, JSONL format easy to grep
+4. **Session cost tracking is accurate** — increments correctly across generations
+5. **Prompt token escalation in sessions** — turn 2 costs more (294 vs 10 prompt tokens) due to conversation history. Worth noting in docs for cost-conscious users.

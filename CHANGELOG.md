@@ -19,6 +19,17 @@ All notable changes to this project are documented here. Every completed task ge
 - Updated SKILL.md with multi-turn, output organization, cost/model guidance
 - Updated README with rate limiting, new params, example response with session stats
 
+### Tested — v0.2 (2026-04-01)
+- Filename param: `logo.png` saved correctly
+- Auto-versioning: second `logo` saved as `logo-v2.png`
+- Subfolder: `test-v02/` created and used
+- Session tracking: running count and cost across 5 generations
+- Manifest: all generations logged to `generations.jsonl`
+- Multi-turn: coffee logo → B&W edit preserved design across turns (prompt tokens 10→294)
+- Seed: accepted without error
+- Imagen filtering: 3 models in discovery (was 6)
+- Rate limit startup warning: showing correctly
+
 ## [0.1.0] - 2026-04-01
 
 ### Added (post-test)
