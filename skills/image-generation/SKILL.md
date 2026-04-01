@@ -24,7 +24,9 @@ Call the `generate_image` tool. The behaviour depends on the parameters:
 {
   "prompt": "A modern dashboard UI with dark theme and blue accent colours",
   "aspectRatio": "16:9",
-  "resolution": "2K"
+  "resolution": "2K",
+  "filename": "dashboard-hero",
+  "subfolder": "landing-page"
 }
 ```
 
@@ -37,6 +39,23 @@ Call the `generate_image` tool. The behaviour depends on the parameters:
 }
 ```
 
+### Multi-Turn Refinement
+The tool returns a `sessionId` with every response. Pass it back to continue editing:
+```json
+{
+  "prompt": "Make the colours warmer and add more contrast",
+  "sessionId": "session-1711929600000-a1b2c3"
+}
+```
+This preserves the conversation history so the model remembers what it generated.
+
+## Output Organization
+
+- Use `filename` to give images meaningful names (e.g. `hero-banner` instead of `gemini-1711929600000-a1b2c3`)
+- Use `subfolder` to group related assets (e.g. `landing-page`, `blog-posts`)
+- Duplicate filenames are auto-versioned: `hero.png`, `hero-v2.png`, `hero-v3.png`
+- When generating assets for a project, save them directly to the project's asset directory using `outputDir`
+
 ## Prompt Tips
 
 Structure prompts as: **[Style] [Subject] [Composition] [Context/Atmosphere]**
@@ -44,19 +63,18 @@ Structure prompts as: **[Style] [Subject] [Composition] [Context/Atmosphere]**
 - Be specific about visual style: "flat illustration", "photorealistic", "watercolour"
 - Include composition details: "centered", "rule of thirds", "close-up"
 - Mention lighting and mood: "warm golden hour light", "moody and dramatic"
+- For editing: use "recreate" or "reimagine" rather than "crop" or "resize" — the latter may produce text-only responses
 
 ## Models
 
-- `gemini-2.5-flash-image` (default) — fast, budget-friendly
-- `gemini-3-pro-image-preview` — best quality, text rendering, up to 14 reference images, 4K output
-- `gemini-3.1-flash-image-preview` — speed + quality balance
-
-## Output
-
-The tool returns the saved file path, model used, token counts, and estimated cost. Images are saved as PNG to the configured output directory (default: `~/gemini-images`).
+- `gemini-2.5-flash-image` (default) — fast (~6s), cheap (~$0.04/image)
+- `gemini-3-pro-image-preview` — best quality, text rendering, up to 14 reference images, 4K. Slower (~16s), pricier (~$0.15/image)
+- `gemini-3.1-flash-image-preview` — speed + quality balance. Supports Google Search grounding.
 
 ## Important
 
-- Every response includes token usage and estimated cost — mention this to the user
-- If the user wants to iterate on an image, pass the previous output path in the `images` array
-- For web assets, suggest appropriate aspect ratios (16:9 for hero images, 1:1 for avatars, etc.)
+- Every response includes token usage, estimated cost, and session totals — mention the cost to the user
+- If rate limits are configured, the response shows remaining budget. Respect these limits.
+- For iterative refinement, prefer `sessionId` over passing the output image back as input — sessions preserve conversation context and produce better edits
+- For web assets, suggest appropriate aspect ratios (16:9 for hero images, 1:1 for avatars, 9:16 for mobile)
+- Use `seed` when the user wants to iterate on a prompt while keeping the visual style consistent

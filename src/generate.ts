@@ -1,7 +1,14 @@
-import { GoogleGenAI } from "@google/genai";
+import { GoogleGenAI, type Content, type Part } from "@google/genai";
 import { readFile } from "fs/promises";
 import { extname } from "path";
 import { calculateUsage, type UsageReport } from "./pricing.js";
+import {
+  appendManifest,
+  checkRateLimit,
+  getSessionStats,
+  recordGeneration,
+  type SessionStats,
+} from "./tracker.js";
 import { log, resolveOutputDir, saveImage } from "./utils.js";
 
 const MIME_TYPES: Record<string, string> = {
@@ -20,13 +27,21 @@ export interface GenerateImageParams {
   aspectRatio?: string;
   resolution?: string;
   outputDir?: string;
+  filename?: string;
+  subfolder?: string;
+  sessionId?: string;
+  seed?: number;
+  useSearchGrounding?: boolean;
 }
 
 export interface GenerateImageResult {
   imagePath: string;
   mimeType: string;
   model: string;
+  sessionId?: string;
+  sessionTurn?: number;
   usage: UsageReport;
+  session: SessionStats;
 }
 
 // Known image-capable model name fragments (Gemini native only)
@@ -35,6 +50,31 @@ const IMAGE_MODEL_PATTERNS = ["image", "img"];
 const EXCLUDED_PREFIXES = ["imagen"];
 
 let cachedAvailableModels: string[] | null = null;
+
+// --- Multi-turn session management ---
+
+interface ConversationSession {
+  history: Content[];
+  model: string;
+  lastAccessed: number;
+}
+
+const sessions = new Map<string, ConversationSession>();
+const SESSION_TIMEOUT = Number(process.env.SESSION_TIMEOUT_MS) || 30 * 60 * 1000;
+
+function cleanupSessions(): void {
+  const now = Date.now();
+  for (const [id, session] of sessions) {
+    if (now - session.lastAccessed > SESSION_TIMEOUT) {
+      log.info(`Session ${id} expired after ${SESSION_TIMEOUT / 1000}s inactivity`);
+      sessions.delete(id);
+    }
+  }
+}
+
+function generateSessionId(): string {
+  return `session-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
+}
 
 function getClient(): GoogleGenAI {
   const apiKey = process.env.GEMINI_API_KEY;
@@ -108,6 +148,9 @@ export async function generateImage(
   const model = params.model ?? process.env.DEFAULT_MODEL ?? "gemini-2.5-flash-image";
   const timeoutMs = Number(process.env.REQUEST_TIMEOUT_MS) || 60_000;
 
+  // Check rate limits before doing anything
+  checkRateLimit();
+
   // Validate model against discovered models if available
   const available = getAvailableModels();
   if (available && available.length > 0 && !available.includes(model)) {
@@ -120,44 +163,78 @@ export async function generateImage(
   log.info(`Generating image with model=${model}`);
   log.debug("Params:", JSON.stringify(params, null, 2));
 
+  // Clean up expired sessions periodically
+  cleanupSessions();
+
   const ai = getClient();
 
-  // Build content parts
-  const parts: Array<{ text: string } | { inlineData: { data: string; mimeType: string } }> = [];
+  // Build content parts for this turn
+  const userParts: Part[] = [];
 
   // Add input images first if provided (for editing)
   if (params.images?.length) {
     log.info(`Loading ${params.images.length} input image(s)`);
     for (const imagePath of params.images) {
       const inlineDataPart = await readImageAsInlineData(imagePath);
-      parts.push(inlineDataPart);
+      userParts.push(inlineDataPart);
     }
   }
 
   // Add the text prompt
-  parts.push({ text: params.prompt });
+  userParts.push({ text: params.prompt });
+
+  // Build contents — from session history or fresh
+  let sessionId = params.sessionId;
+  let sessionTurn = 1;
+  let contents: Content[];
+
+  if (sessionId && sessions.has(sessionId)) {
+    const session = sessions.get(sessionId)!;
+    if (session.model !== model) {
+      throw new Error(
+        `Session "${sessionId}" uses model "${session.model}" but you requested "${model}". ` +
+          "Use the same model for all turns in a session, or start a new session.",
+      );
+    }
+    contents = [...session.history, { role: "user", parts: userParts }];
+    sessionTurn = Math.floor(contents.length / 2) + 1;
+    log.info(`Continuing session ${sessionId}, turn ${sessionTurn}`);
+  } else {
+    contents = [{ role: "user", parts: userParts }];
+    // Generate a session ID if editing (images provided) even if not explicitly requested
+    if (!sessionId) {
+      sessionId = generateSessionId();
+    }
+  }
 
   // Build config
   const imageConfig: Record<string, string> = {};
   if (params.aspectRatio) imageConfig.aspectRatio = params.aspectRatio;
   if (params.resolution) imageConfig.imageSize = params.resolution;
 
+  const generateConfig: Record<string, unknown> = {
+    responseModalities: ["TEXT", "IMAGE"],
+    abortSignal: undefined as unknown,
+  };
+  if (Object.keys(imageConfig).length > 0) generateConfig.imageConfig = imageConfig;
+  if (params.seed !== undefined) generateConfig.seed = params.seed;
+  if (params.useSearchGrounding) {
+    generateConfig.tools = [{ googleSearch: {} }];
+  }
+
   const startTime = Date.now();
 
   // Call Gemini API with timeout
   const controller = new AbortController();
   const timeout = setTimeout(() => controller.abort(), timeoutMs);
+  generateConfig.abortSignal = controller.signal;
 
   let response;
   try {
     response = await ai.models.generateContent({
       model,
-      contents: [{ role: "user", parts }],
-      config: {
-        responseModalities: ["TEXT", "IMAGE"],
-        imageConfig: Object.keys(imageConfig).length > 0 ? imageConfig : undefined,
-        abortSignal: controller.signal,
-      },
+      contents,
+      config: generateConfig,
     });
   } catch (err) {
     if (err instanceof Error && err.name === "AbortError") {
@@ -172,10 +249,19 @@ export async function generateImage(
   }
 
   const elapsed = Date.now() - startTime;
+
+  // Store conversation history for multi-turn (preserve full response parts including thoughtSignature)
+  const responseParts = response.candidates?.[0]?.content?.parts ?? [];
+  if (sessionId) {
+    sessions.set(sessionId, {
+      history: [...contents, { role: "model", parts: responseParts }],
+      model,
+      lastAccessed: Date.now(),
+    });
+  }
   log.info(`API response received in ${elapsed}ms`);
 
   // Extract image from response
-  const responseParts = response.candidates?.[0]?.content?.parts ?? [];
   let imageData: string | undefined;
   let imageMimeType = "image/png";
 
@@ -241,7 +327,13 @@ export async function generateImage(
 
   // Save image
   const outputDir = resolveOutputDir(params.outputDir);
-  const imagePath = await saveImage(imageData, outputDir, imageMimeType);
+  const imagePath = await saveImage({
+    base64Data: imageData,
+    outputDir,
+    mimeType: imageMimeType,
+    filename: params.filename,
+    subfolder: params.subfolder,
+  });
 
   // Calculate usage
   const usage = calculateUsage(model, response.usageMetadata);
@@ -250,10 +342,28 @@ export async function generateImage(
   );
   log.debug("Usage details:", JSON.stringify(usage, null, 2));
 
+  // Record to manifest and session tracker
+  recordGeneration(usage);
+  appendManifest({
+    timestamp: new Date().toISOString(),
+    filename: imagePath.split(/[/\\]/).pop() ?? "",
+    path: imagePath,
+    prompt: params.prompt,
+    model,
+    aspectRatio: params.aspectRatio,
+    resolution: params.resolution,
+    subfolder: params.subfolder,
+    inputImages: params.images?.length ?? 0,
+    usage,
+  });
+
   return {
     imagePath,
     mimeType: imageMimeType,
     model,
+    sessionId,
+    sessionTurn,
     usage,
+    session: getSessionStats(),
   };
 }

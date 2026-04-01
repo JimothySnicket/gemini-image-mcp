@@ -125,8 +125,13 @@ All optional. The only required setup is `GEMINI_API_KEY` (covered above).
 | `DEFAULT_MODEL` | `gemini-2.5-flash-image` | Default Gemini model |
 | `LOG_LEVEL` | `info` | `debug`, `info`, or `error` |
 | `REQUEST_TIMEOUT_MS` | `60000` | API request timeout in milliseconds |
+| `MAX_REQUESTS_PER_HOUR` | `0` (unlimited) | Max image generations per rolling hour |
+| `MAX_COST_PER_HOUR` | `0` (unlimited) | Max estimated cost (USD) per rolling hour |
+| `SESSION_TIMEOUT_MS` | `1800000` (30min) | Multi-turn session expiry |
 
 Set these the same way as `GEMINI_API_KEY`, or pass them in the `env` block of your MCP config.
+
+**Rate limiting** is recommended when agents have access to this tool. An agent in a loop can generate images quickly — set `MAX_REQUESTS_PER_HOUR=20` and `MAX_COST_PER_HOUR=5` as sensible defaults.
 
 ## Tool: `generate_image`
 
@@ -139,16 +144,22 @@ Set these the same way as `GEMINI_API_KEY`, or pass them in the `env` block of y
 | `model` | No | Gemini model ID |
 | `aspectRatio` | No | `1:1`, `16:9`, `9:16`, `3:2`, `2:3`, `4:3`, `3:4`, `21:9` |
 | `resolution` | No | `1K`, `2K`, `4K` |
-| `personGeneration` | No | `ALLOW_ALL`, `ALLOW_ADULT`, `ALLOW_NONE` |
 | `outputDir` | No | Override output directory for this request |
+| `filename` | No | Base name for saved file (e.g. `hero-banner`). Auto-versioned if duplicate. |
+| `subfolder` | No | Subfolder within output directory (e.g. `landing-page`) |
+| `sessionId` | No | Continue a multi-turn editing session from a previous response |
+| `seed` | No | Integer seed for reproducible generation |
+| `useSearchGrounding` | No | Enable Google Search grounding (gemini-3.1-flash) |
 
 ### Example Response
 
 ```json
 {
-  "imagePath": "/home/user/gemini-images/gemini-1711929600000-a1b2c3.png",
+  "imagePath": "/home/user/gemini-images/hero-banner.png",
   "mimeType": "image/png",
   "model": "gemini-2.5-flash-image",
+  "sessionId": "session-1711929600000-a1b2c3",
+  "sessionTurn": 1,
   "usage": {
     "promptTokens": 5,
     "outputTokens": 1295,
@@ -156,6 +167,16 @@ Set these the same way as `GEMINI_API_KEY`, or pass them in the `env` block of y
     "thinkingTokens": 412,
     "totalTokens": 1712,
     "estimatedCost": "$0.0390"
+  },
+  "session": {
+    "generationsThisSession": 3,
+    "totalCostThisSession": "$0.1161",
+    "generationsThisHour": 5,
+    "limit": {
+      "maxPerHour": 20,
+      "maxCostPerHour": 5,
+      "remainingThisHour": 15
+    }
   }
 }
 ```
@@ -167,6 +188,12 @@ Set these the same way as `GEMINI_API_KEY`, or pass them in the `env` block of y
 
 **Image editing:**
 > "Take this screenshot and redesign the header with a dark theme" (with image paths)
+
+**Multi-turn refinement:**
+> "Draw a logo for a coffee shop" → get result with `sessionId` → "Make it more minimal" (pass `sessionId` back)
+
+**Organized output:**
+> "Generate a hero banner" with `filename: "hero"`, `subfolder: "landing-page"` → saves to `~/gemini-images/landing-page/hero.png`
 
 **High quality:**
 > "A photorealistic product shot of headphones on marble, 4K" (using gemini-3-pro-image-preview)

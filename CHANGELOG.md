@@ -2,17 +2,22 @@
 
 All notable changes to this project are documented here. Every completed task gets an entry, even minor ones.
 
-## [0.2.0] - Planned
+## [0.2.0] - 2026-04-01
 
-Design spec written: `docs/superpowers/specs/2026-04-01-v02-features-design.md`
-
-- Output organization: `filename` param with auto-versioning (hero-banner.png, hero-banner-v2.png), `subfolder` param
-- Generation manifest: `generations.jsonl` append-only log of all generations with prompts, params, cost
-- Session tracking: running totals (generations, cost) returned in every response
-- Rate limiting: `MAX_REQUESTS_PER_HOUR`, `MAX_COST_PER_HOUR` env vars with clear error messages
-- Multi-turn editing: `sessionId` param, server-managed conversation history, thoughtSignature preservation
-- Seed parameter: reproducible generation
-- Google Search grounding: `useSearchGrounding` param for real-world accuracy
+### Added
+- `filename` param: meaningful file names with auto-versioning (hero.png, hero-v2.png, hero-v3.png)
+- `subfolder` param: organize output into subdirectories (e.g. `landing-page/hero.png`)
+- `generations.jsonl` manifest: append-only log of every generation (prompt, params, model, cost, path)
+- Session tracking: every response includes `session` object with running totals (generations, cost, hourly count)
+- Rate limiting via `MAX_REQUESTS_PER_HOUR` and `MAX_COST_PER_HOUR` env vars. Clear error with remaining budget.
+- Startup log warns if no rate limits configured
+- Multi-turn editing sessions: `sessionId` param, server-managed conversation history with thoughtSignature preservation, 30min expiry
+- Model mismatch detection: error if session uses a different model than the original
+- `seed` param: integer seed for reproducible generation
+- `useSearchGrounding` param: Google Search grounding for real-world accuracy (gemini-3.1-flash)
+- New module: `src/tracker.ts` — manifest, rate limiting, session cost tracking
+- Updated SKILL.md with multi-turn, output organization, cost/model guidance
+- Updated README with rate limiting, new params, example response with session stats
 
 ## [0.1.0] - 2026-04-01
 

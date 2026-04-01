@@ -49,6 +49,32 @@ server.registerTool(
         .describe(
           "Directory to save the image. Defaults to OUTPUT_DIR env var or ~/gemini-images",
         ),
+      filename: z
+        .optional(z.string())
+        .describe(
+          "Base name for the saved file (e.g. 'hero-banner'). Extension added automatically. " +
+            "Duplicates get a version suffix (hero-banner-v2). Omit for auto-generated name.",
+        ),
+      subfolder: z
+        .optional(z.string())
+        .describe(
+          "Subfolder within the output directory (e.g. 'landing-page'). Created automatically.",
+        ),
+      sessionId: z
+        .optional(z.string())
+        .describe(
+          "Continue a multi-turn editing session. Pass the sessionId from a previous response " +
+            "to refine the image iteratively. The server preserves conversation history.",
+        ),
+      seed: z
+        .optional(z.number().int())
+        .describe("Seed for reproducible generation. Same seed + prompt + model = same image."),
+      useSearchGrounding: z
+        .optional(z.boolean())
+        .describe(
+          "Enable Google Search grounding for real-world accuracy. " +
+            "Available on gemini-3.1-flash-image-preview.",
+        ),
     },
   },
   async (args) => {
@@ -60,6 +86,11 @@ server.registerTool(
         aspectRatio: args.aspectRatio,
         resolution: args.resolution,
         outputDir: args.outputDir,
+        filename: args.filename,
+        subfolder: args.subfolder,
+        sessionId: args.sessionId,
+        seed: args.seed,
+        useSearchGrounding: args.useSearchGrounding,
       });
 
       return {
@@ -103,9 +134,17 @@ async function main() {
   const outputDir = process.env.OUTPUT_DIR ?? "~/gemini-images";
   const logLevel = process.env.LOG_LEVEL ?? "info";
 
+  const maxReqHour = Number(process.env.MAX_REQUESTS_PER_HOUR) || 0;
+  const maxCostHour = Number(process.env.MAX_COST_PER_HOUR) || 0;
+
   log.info(`  Model: ${defaultModel}`);
   log.info(`  Output: ${outputDir}`);
   log.info(`  Log level: ${logLevel}`);
+  if (maxReqHour > 0 || maxCostHour > 0) {
+    log.info(`  Rate limits: ${maxReqHour > 0 ? maxReqHour + " req/hr" : "unlimited"}, ${maxCostHour > 0 ? "$" + maxCostHour + "/hr" : "unlimited cost"}`);
+  } else {
+    log.info("  Rate limits: none configured. Set MAX_REQUESTS_PER_HOUR / MAX_COST_PER_HOUR to limit.");
+  }
 
   // Discover available image models (also validates the API key)
   try {

@@ -1,8 +1,8 @@
 import { createHash } from "crypto";
-import { appendFileSync, mkdirSync } from "fs";
+import { appendFileSync, existsSync, mkdirSync } from "fs";
 import { mkdir, writeFile } from "fs/promises";
 import { homedir } from "os";
-import { join, resolve } from "path";
+import { basename, extname, join, resolve } from "path";
 
 // --- Logging ---
 
@@ -81,15 +81,49 @@ export function generateFilename(mimeType: string): string {
   return `gemini-${timestamp}-${hash}${ext}`;
 }
 
-export async function saveImage(
-  base64Data: string,
-  outputDir: string,
+function resolveFilename(
+  dir: string,
+  requestedName: string,
   mimeType: string,
+): string {
+  const ext = MIME_TO_EXT[mimeType] ?? ".png";
+  // Strip any extension the user may have included
+  const base = basename(requestedName, extname(requestedName));
+  const target = join(dir, `${base}${ext}`);
+
+  if (!existsSync(target)) return `${base}${ext}`;
+
+  // Find next available version
+  let version = 2;
+  while (existsSync(join(dir, `${base}-v${version}${ext}`))) {
+    version++;
+  }
+  return `${base}-v${version}${ext}`;
+}
+
+export interface SaveImageOptions {
+  base64Data: string;
+  outputDir: string;
+  mimeType: string;
+  filename?: string;
+  subfolder?: string;
+}
+
+export async function saveImage(
+  opts: SaveImageOptions,
 ): Promise<string> {
-  await mkdir(outputDir, { recursive: true });
-  const filename = generateFilename(mimeType);
-  const filepath = join(outputDir, filename);
-  const buffer = Buffer.from(base64Data, "base64");
+  let dir = opts.outputDir;
+  if (opts.subfolder) {
+    dir = join(dir, opts.subfolder);
+  }
+  await mkdir(dir, { recursive: true });
+
+  const filename = opts.filename
+    ? resolveFilename(dir, opts.filename, opts.mimeType)
+    : generateFilename(opts.mimeType);
+
+  const filepath = join(dir, filename);
+  const buffer = Buffer.from(opts.base64Data, "base64");
   await writeFile(filepath, buffer);
   log.info(`Image saved: ${filepath} (${buffer.length} bytes)`);
   return filepath;
