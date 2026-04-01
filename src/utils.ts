@@ -58,10 +58,27 @@ export const log = {
 
 // --- File Utilities ---
 
-export function resolveOutputDir(perRequest?: string): string {
-  if (perRequest) return resolve(perRequest);
+function defaultOutputDir(): string {
   if (process.env.OUTPUT_DIR) return resolve(process.env.OUTPUT_DIR);
   return join(homedir(), "gemini-images");
+}
+
+export function resolveOutputDir(perRequest?: string): string {
+  if (perRequest) return resolve(perRequest);
+  return defaultOutputDir();
+}
+
+/** Ensure a resolved path is under the allowed base directory. Prevents path traversal. */
+function validatePathUnder(candidate: string, base: string): void {
+  const resolvedCandidate = resolve(candidate);
+  const resolvedBase = resolve(base);
+  if (!resolvedCandidate.startsWith(resolvedBase + "/") &&
+      !resolvedCandidate.startsWith(resolvedBase + "\\") &&
+      resolvedCandidate !== resolvedBase) {
+    throw new Error(
+      `Path traversal blocked: "${candidate}" resolves outside the output directory.`,
+    );
+  }
 }
 
 const MIME_TO_EXT: Record<string, string> = {
@@ -115,6 +132,7 @@ export async function saveImage(
   let dir = opts.outputDir;
   if (opts.subfolder) {
     dir = join(dir, opts.subfolder);
+    validatePathUnder(dir, opts.outputDir);
   }
   await mkdir(dir, { recursive: true });
 

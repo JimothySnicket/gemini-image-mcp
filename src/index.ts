@@ -8,7 +8,7 @@ import { log } from "./utils.js";
 
 const server = new McpServer({
   name: "gemini-image-mcp",
-  version: "0.1.0",
+  version: "0.2.0",
 });
 
 server.registerTool(
@@ -27,9 +27,9 @@ server.registerTool(
           "Text description of the image to generate, or editing instruction when images are provided",
         ),
       images: z
-        .optional(z.array(z.string()))
+        .optional(z.array(z.string()).max(14))
         .describe(
-          "File paths to input/reference images for editing. Omit for text-to-image generation",
+          "File paths to input/reference images for editing (max 14). Omit for text-to-image generation",
         ),
       model: z
         .optional(z.string())
@@ -158,10 +158,11 @@ server.registerTool(
               "Brightness threshold (0-255). Pixels above this become transparent. Default 240. Ignored if color is set.",
             ),
             color: z.optional(z.string()).describe(
-              "Hex color to remove (e.g. '#00FF00' for green screen). Use with tolerance.",
+              "Hex color to remove (e.g. '#00FF00' for green screen). " +
+              "Use #00FF00 for AI-generated green screens — works better than matching the exact background shade.",
             ),
             tolerance: z.optional(z.number().int().min(0).max(255)).describe(
-              "Color match tolerance (0-255). How different a pixel can be from the target color and still be removed. Default 50.",
+              "Color match tolerance (0-255). How different a pixel can be from the target color and still be removed. Default 80.",
             ),
           }),
         )
@@ -225,7 +226,7 @@ async function main() {
   log.info(`  Node: ${process.version}`);
   log.info(`  PID: ${process.pid}`);
   log.info(`  CWD: ${process.cwd()}`);
-  log.info(`  GEMINI_API_KEY: ${process.env.GEMINI_API_KEY ? "set (" + process.env.GEMINI_API_KEY.length + " chars)" : "NOT SET"}`);
+  log.info(`  GEMINI_API_KEY: ${process.env.GEMINI_API_KEY ? "set" : "NOT SET"}`);
 
   if (!process.env.GEMINI_API_KEY) {
     log.error(

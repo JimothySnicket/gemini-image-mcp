@@ -62,6 +62,34 @@ Use `process_image` for local, free operations that don't need AI:
 
 ### Common Pipelines
 
+**Subject on a specific background (canvas approach — recommended):**
+Create a solid colour canvas with `process_image`, then feed it to `generate_image` as input. Gemini places the subject with correct lighting and reflections — no chroma key needed.
+```json
+// Step 1: generate_image with a canvas image as input
+{
+  "prompt": "Place a yellow rubber duck on this background. Product photography, studio lighting, centered.",
+  "images": ["./canvas-white.png"],
+  "filename": "duck-on-white"
+}
+```
+This is better than chroma key for yellow, green, or glass/reflective subjects.
+
+**Transparent asset from green screen (two-step pipeline):**
+Generate on green, then chroma key locally for free. Best for high-contrast subjects (dark/red/blue on green):
+```json
+// Step 1: generate_image
+{"prompt": "A product photo on a bright green background", "filename": "product-green"}
+
+// Step 2: process_image
+{
+  "imagePath": "./product-green.png",
+  "removeBackground": {"color": "#00FF00"},
+  "trim": true,
+  "filename": "product-transparent"
+}
+```
+Always use `#00FF00` — it works better than trying to match Gemini's actual green shade.
+
 **Favicon/icon from a logo:**
 ```json
 {
@@ -93,13 +121,17 @@ Strategies: `center` (default, crops from center), `attention` (shifts crop towa
 ```
 
 ### Limitations of process_image
-- **Background removal is threshold-based** — it makes near-white pixels transparent. If the subject is also white/light (e.g. white t-shirt on white background), it will damage the subject. Use `generate_image` with "remove the background" for same-colour subjects.
+- **Threshold bg removal only works on light backgrounds** — it makes near-white pixels transparent. If the subject is also white/light (e.g. white t-shirt on white background), it will damage the subject. For same-colour subjects, use chroma key (`color` param) or `generate_image` with "remove the background".
+- **Chroma key struggles with yellow, green, or glass subjects** — yellow is too close to green in hue space and gets partially removed. Green subjects (plants, etc.) overlap with the background. Glass/reflective surfaces pick up green reflections that can't be separated. For these subjects, use the canvas approach instead (feed a solid background to `generate_image`).
+- **Use #00FF00 for chroma key, not the actual background colour** — Gemini generates desaturated greens (~hue 105°), not pure green (hue 120°). Targeting #00FF00 creates a natural safety margin that protects the subject. Default tolerance is 80.
 - **Trim removes all border whitespace** — don't use trim on sprite sheets or images where surrounding space is intentional. Trim + small resize = blurry results.
 - **Resize respects the input dimensions** — if you trim a 1024px image down to 200px of content, then resize to 128px, that's fine. But trimming a 1024px-wide sprite sheet with 4 characters and resizing to 128px means 32px per character.
 
 ### When to use which tool
-- **process_image** — crop, resize, format convert, threshold bg removal (on dark subjects with light backgrounds), trim. Free and instant.
-- **generate_image with images** — AI-powered editing: style changes, complex background removal (any background), content-aware modifications. Costs ~$0.04 per operation.
+- **process_image** — crop, resize, format convert, threshold bg removal (white backgrounds), chroma key bg removal (green screen), trim. Free and instant.
+- **Canvas approach** (generate_image with a solid colour input image) — when you want a subject on a specific background, especially for yellow, green, or glass subjects. One API call, correct lighting.
+- **Green screen + process_image** — when you need a transparent PNG for compositing. Best for high-contrast subjects (red, blue, black, white on green). Two calls, processing is free.
+- **generate_image with images** — AI-powered editing: style changes, complex background removal (any background, any subject), content-aware modifications. Costs ~$0.04 per operation.
 
 ## Prompt Tips
 

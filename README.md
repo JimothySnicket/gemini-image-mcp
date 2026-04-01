@@ -20,7 +20,8 @@ Built on Gemini's native image generation API (`generateContent`), not the depre
 ### process_image — Local (free, no API calls)
 - **Crop** — pixel-exact, aspect ratio (center), or focal point (attention/entropy)
 - **Resize** — to width, height, or both (maintains aspect ratio)
-- **Background removal** — threshold-based, makes near-white pixels transparent
+- **Background removal** — threshold-based (white backgrounds) or chroma key (green screen, any solid colour)
+- **Chroma key pipeline** — HSV keying with smoothstep feather, spill suppression, and edge anti-aliasing
 - **Trim** — auto-remove whitespace borders
 - **Format conversion** — PNG, JPEG, WebP with quality control
 
@@ -225,7 +226,7 @@ Local image processing via sharp. Free, fast, no API calls.
 | `imagePath` | Yes | Path to the image file to process |
 | `crop` | No | Crop by pixel dimensions, aspect ratio, or focal point strategy |
 | `resize` | No | Resize to width/height (maintains aspect ratio) |
-| `removeBackground` | No | Make near-white pixels transparent (threshold-based) |
+| `removeBackground` | No | Remove background by threshold (white) or chroma key (any solid colour) |
 | `trim` | No | Auto-remove whitespace/transparent borders |
 | `format` | No | Convert to `png`, `jpeg`, or `webp` |
 | `quality` | No | Output quality for JPEG/WebP (1-100) |
@@ -249,11 +250,41 @@ Local image processing via sharp. Free, fast, no API calls.
 {"aspectRatio": "16:9", "strategy": "entropy"}
 ```
 
+### Background Removal Options
+
+```json
+// White/light background (threshold)
+{"threshold": 240}
+
+// Green screen (chroma key)
+{"color": "#00FF00"}
+
+// Any solid colour
+{"color": "#0000FF", "tolerance": 60}
+```
+
+Chroma key uses HSV colour space keying with smoothstep feathering, spill suppression (removes colour fringe on edge pixels), and 5-pass edge anti-aliasing. Default tolerance is 80. Always use `#00FF00` for AI-generated green screens — it works better than matching the exact shade Gemini produces.
+
+**Note:** Chroma key works best with high-contrast subjects (red, blue, black on green). For yellow, green, or glass/reflective subjects, use the canvas approach instead — feed a solid colour background image to `generate_image` and let Gemini place the subject with correct lighting.
+
 ### Common Pipelines
+
+**Subject on a specific background (canvas approach):**
+```
+generate_image → "Place a [subject] on this background" with images: [solid colour canvas]
+```
+One API call. Best for yellow, green, or glass subjects where chroma key struggles.
+
+**Transparent asset from green screen:**
+```
+generate_image → "A product photo on a bright green background"
+process_image → removeBackground {color: "#00FF00"} + trim
+```
+Two tool calls, zero cost for the processing step. Best for high-contrast subjects.
 
 **Favicon from a generated logo:**
 ```
-process_image → removeBackground + trim + resize {width: 192, height: 192}
+process_image → removeBackground {threshold: 230} + trim + resize {width: 192, height: 192}
 ```
 
 **Social card from a photo:**

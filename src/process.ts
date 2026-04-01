@@ -96,7 +96,7 @@ export async function processImage(
 
     const pixels = Buffer.from(data);
     const color = params.removeBackground.color;
-    const tolerance = params.removeBackground.tolerance ?? 50;
+    const tolerance = params.removeBackground.tolerance ?? 80;
 
     if (color) {
       // HSV-based chroma key with smoothstep feather and spill suppression
@@ -244,11 +244,12 @@ export async function processImage(
   }
 
   if (params.resize) {
+    const bothDims = !!(params.resize.width && params.resize.height);
     pipeline = pipeline.resize({
       width: params.resize.width,
       height: params.resize.height,
-      fit: "inside",
-      withoutEnlargement: true,
+      fit: bothDims ? "cover" : "inside",
+      withoutEnlargement: !bothDims,
     });
     const w = params.resize.width ?? "auto";
     const h = params.resize.height ?? "auto";

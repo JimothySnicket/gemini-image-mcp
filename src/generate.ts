@@ -1,5 +1,5 @@
 import { GoogleGenAI, type Content, type Part } from "@google/genai";
-import { readFile } from "fs/promises";
+import { readFile, stat } from "fs/promises";
 import { extname } from "path";
 import { calculateUsage, type UsageReport } from "./pricing.js";
 import {
@@ -61,6 +61,7 @@ interface ConversationSession {
 
 const sessions = new Map<string, ConversationSession>();
 const SESSION_TIMEOUT = Number(process.env.SESSION_TIMEOUT_MS) || 30 * 60 * 1000;
+const MAX_SESSION_TURNS = 10;
 
 function cleanupSessions(): void {
   const now = Date.now();
@@ -126,10 +127,18 @@ async function readImageAsInlineData(
     );
   }
 
+  const MAX_IMAGE_SIZE = 50 * 1024 * 1024; // 50MB
   let buffer: Buffer;
   try {
+    const fileStat = await stat(filepath);
+    if (fileStat.size > MAX_IMAGE_SIZE) {
+      throw new Error(
+        `Image file is ${Math.round(fileStat.size / 1024 / 1024)}MB, max is 50MB.`,
+      );
+    }
     buffer = await readFile(filepath);
   } catch (err) {
+    if (err instanceof Error && err.message.includes("max is 50MB")) throw err;
     const msg = err instanceof Error ? err.message : String(err);
     throw new Error(`Failed to read image file "${filepath}": ${msg}`);
   }
@@ -198,6 +207,12 @@ export async function generateImage(
     }
     contents = [...session.history, { role: "user", parts: userParts }];
     sessionTurn = Math.floor(contents.length / 2) + 1;
+    if (sessionTurn > MAX_SESSION_TURNS) {
+      throw new Error(
+        `Session "${sessionId}" has reached the maximum of ${MAX_SESSION_TURNS} turns. ` +
+          "Start a new session to continue.",
+      );
+    }
     log.info(`Continuing session ${sessionId}, turn ${sessionTurn}`);
   } else {
     contents = [{ role: "user", parts: userParts }];
@@ -249,7 +264,9 @@ export async function generateImage(
           "Try a simpler prompt or increase REQUEST_TIMEOUT_MS.",
       );
     }
-    throw err;
+    // Sanitize error to avoid leaking request internals (URLs, keys)
+    const msg = err instanceof Error ? err.message : String(err);
+    throw new Error(`Gemini API error: ${msg}`);
   } finally {
     clearTimeout(timeout);
   }

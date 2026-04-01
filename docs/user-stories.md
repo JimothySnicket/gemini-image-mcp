@@ -277,3 +277,68 @@ Phrases that previously triggered text-only responses (no image):
 | Multi-turn session (turn 2: add garden) | PASS | PASS (TEXT+IMAGE, preserved style + added garden) |
 
 **Conclusion:** IMAGE-only mode eliminates all text-only failures. Prompt prefixing is NOT needed and can be counterproductive. Sessions correctly switch to TEXT+IMAGE for thoughtSignature preservation.
+
+### Run: 2026-04-01 — Pre-Production Test Suite (v0.2 final)
+
+All tests run against built dist/ after doc updates (chroma key added to README + SKILL.md, version fixed to 0.2.0).
+
+**Generation Tests**
+
+| # | Test | Result | Notes |
+|---|------|--------|-------|
+| 1 | Simple prompt | PASS | "Mountain landscape at dawn" — 1300 tokens, $0.039, saved to pre-production/ subfolder |
+| 2 | Filename + subfolder + 16:9 | PASS | `test-02-hero.png` in `pre-production/`, 16:9 aspect, custom filename |
+| 3 | Multi-turn session (turn 2) | PASS | SessionId preserved, prompt tokens 10→280 (history replayed), turn 2 correctly applied edit |
+
+**Processing Tests**
+
+| # | Test | Result | Notes |
+|---|------|--------|-------|
+| 4 | Pixel-exact crop | PASS | 512x512 at offset (100,100) from 1024x1024 source |
+| 5 | Aspect ratio crop + attention | PASS | 16:9 → 1:1 via attention strategy, 768x768 output |
+| 6 | Resize (width only) | PASS | 1024→256, aspect ratio maintained (square stays square) |
+| 7 | Threshold bg removal + trim | PASS | White bg removed (threshold 230), trimmed 1024x1024 → 350x357 |
+| 8 | Chroma key bg removal + trim | PASS* | See broad chroma key test below for full analysis |
+| 9 | Format conversion (WebP) | PASS | PNG → WebP at quality 85, correct `.webp` extension |
+| 10 | Combined pipeline (favicon) | PASS | bg remove + trim + resize 192x192 exact (fixed: fit "cover" when both dims given) |
+
+**Error Handling Tests**
+
+| # | Test | Result | Notes |
+|---|------|--------|-------|
+| 11 | Missing file (process_image) | PASS | "Image not found: C:\...\does-not-exist.png" — clear path in error |
+| 12 | Invalid model (generate_image) | PASS | Lists available models: gemini-2.5-flash-image, gemini-3-pro-image-preview, gemini-3.1-flash-image-preview |
+
+**Summary: 12/12 PASS** (test 8 qualified, test 10 fixed). All README claims verified.
+
+### Run: 2026-04-01 — Broad Chroma Key Comparison
+
+Tested `#00FF00` (tolerance 80) vs auto-detect vs canvas approach across 6 subjects.
+
+**Subjects generated on green backgrounds:**
+
+| Subject | #00FF00 (tol 80) | Auto-detect | Notes |
+|---------|------------------|-------------|-------|
+| Red mug (glossy) | PASS — 189k opaque, clean edges | FAIL — 0 opaque, mug semi-transparent | Auto too aggressive on reflective surfaces |
+| White sneaker | PASS | PASS | Tie — high contrast, easy case |
+| Black chess piece | PASS | PASS | Tie — high contrast, easy case |
+| Yellow rubber duck | FAIL — duck desaturated/damaged | FAIL — duck more damaged | Both fail — yellow (hue ~60°) too close to green (hue ~120°) |
+| Green plant | PASS* — pot clean, plant colour muted | FAIL — plant stripped entirely | Hex preserves more but still affects green subject |
+| Glass perfume | PASS — bottle visible, some green tint | FAIL — bottle nearly invisible | Auto nuked the glass (transparency + reflections) |
+
+**Canvas approach (feed solid colour bg to generate_image):**
+
+| Subject | On white | On black | Notes |
+|---------|----------|----------|-------|
+| Yellow duck | PASS — perfect bright yellow | PASS — natural lighting | Zero colour damage, Gemini handles compositing natively |
+| Glass perfume | PASS — clean glass, natural reflections | N/A | No green contamination at all |
+
+**Conclusions:**
+
+1. **#00FF00 with tolerance 80 is the best chroma key setting.** The 15° hue offset from Gemini's actual green (~105°) creates a safety margin that protects subjects. Auto-detect eliminates this margin and damages more subjects.
+2. **Chroma key works well for:** red, blue, black, white, and other high-contrast subjects on green.
+3. **Chroma key fails for:** yellow (adjacent hue), green (same hue), glass/reflective (picks up green reflections).
+4. **Canvas approach is better for difficult subjects.** Feed a solid colour canvas as input to `generate_image` — Gemini places the subject with correct lighting. One API call, no post-processing, works for any subject.
+5. **Auto-detect reverted.** Fixed `#00FF00` target with default tolerance 80 produces better results across all tested subjects.
+6. **Default tolerance bumped from 50 → 80.** Gemini's desaturated greens need the wider range.
+7. **Resize fix:** Both width+height now uses `fit: "cover"` for exact dimensions (was `fit: "inside"`, producing 188x192 instead of 192x192).

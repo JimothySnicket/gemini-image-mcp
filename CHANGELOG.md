@@ -8,7 +8,8 @@ All notable changes to this project are documented here. Every completed task ge
 - `process_image` tool: local image processing via sharp. Free, fast, no API calls.
   - Crop: pixel-exact, aspect ratio (center), or focal point (attention/entropy strategies)
   - Resize: width, height, or both with aspect ratio preservation
-  - Background removal: threshold-based, near-white pixels to transparent
+  - Background removal: threshold-based (white backgrounds) or chroma key (green screen / any solid colour)
+  - Chroma key pipeline: HSV keying with smoothstep feather, spill suppression, 5-pass 3x3 edge anti-aliasing
   - Trim: auto-remove whitespace/transparent borders
   - Format conversion: PNG, JPEG, WebP with quality control
   - Operations chain in a single call (e.g. removeBackground + trim + resize for favicon pipeline)
@@ -29,6 +30,15 @@ All notable changes to this project are documented here. Every completed task ge
 ### Changed
 - Single-shot generation uses `responseModalities: ['IMAGE']` instead of `['TEXT', 'IMAGE']`. Eliminates all text-only failures. Sessions still use `['TEXT', 'IMAGE']` for thoughtSignature preservation.
 - Prompt prefixing confirmed unnecessary and potentially harmful — removed from guidance
+- Resize with both width+height now uses `fit: "cover"` for exact dimensions (was `fit: "inside"`, producing e.g. 188x192 instead of 192x192)
+- Default chroma key tolerance bumped from 50 → 80 (Gemini generates desaturated greens that need wider range)
+- Server version in MCP handshake now 0.2.0 (was 0.1.0)
+
+### Tested — Chroma Key Broad Comparison (2026-04-01)
+- 6 subjects tested: red mug, white sneaker, black chess, yellow duck, green plant, glass perfume
+- #00FF00 with tolerance 80 is the best approach — the 15° hue offset from Gemini's actual green creates a safety margin
+- Auto-detect (corner sampling) tested and rejected — too aggressive, damages subjects with any green tones
+- Canvas approach discovered: feed a solid colour image as input, Gemini places the subject with correct lighting. Better than chroma key for yellow/green/glass subjects
 
 ### Tested — v0.2 (2026-04-01)
 - Filename param: `logo.png` saved correctly
