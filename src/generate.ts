@@ -212,8 +212,11 @@ export async function generateImage(
   if (params.aspectRatio) imageConfig.aspectRatio = params.aspectRatio;
   if (params.resolution) imageConfig.imageSize = params.resolution;
 
+  // Use IMAGE-only for single-shot (prevents text-only responses).
+  // Use TEXT+IMAGE for sessions (needed to preserve thoughtSignature in history).
+  const isSession = !!(sessionId && sessions.has(sessionId));
   const generateConfig: Record<string, unknown> = {
-    responseModalities: ["TEXT", "IMAGE"],
+    responseModalities: isSession ? ["TEXT", "IMAGE"] : ["IMAGE"],
     abortSignal: undefined as unknown,
   };
   if (Object.keys(imageConfig).length > 0) generateConfig.imageConfig = imageConfig;
