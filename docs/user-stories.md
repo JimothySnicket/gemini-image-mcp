@@ -208,3 +208,15 @@ Results are appended here as tests are run. Format:
 3. **Manifest is comprehensive** — every field logged, JSONL format easy to grep
 4. **Session cost tracking is accurate** — increments correctly across generations
 5. **Prompt token escalation in sessions** — turn 2 costs more (294 vs 10 prompt tokens) due to conversation history. Worth noting in docs for cost-conscious users.
+
+### Run: 2026-04-01 — process_image Tests
+
+| Operation | Result | Notes |
+|-----------|--------|-------|
+| Resize | PASS | 1024x1024 → 256x256 thumbnail, aspect ratio maintained |
+| Format conversion | PASS | PNG → JPEG at quality 80, correct `.jpg` extension |
+| Background removal | PASS | Threshold 230, white areas transparent on B&W coffee logo |
+| Trim | PASS | Auto-removed whitespace, 256x256 → 154x62 |
+| Crop | PASS | 512x512 from center of 1024x1024, correct offset |
+| Subfolder nesting | PASS | `test-v02/processed/` created automatically |
+| Filename | PASS | All saved with requested names |

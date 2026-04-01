@@ -5,6 +5,7 @@ All notable changes to this project are documented here. Every completed task ge
 ## [0.2.0] - 2026-04-01
 
 ### Added
+- `process_image` tool: local image processing via sharp (crop, resize, remove background, trim, format conversion). Free, fast, no API calls.
 - `filename` param: meaningful file names with auto-versioning (hero.png, hero-v2.png, hero-v3.png)
 - `subfolder` param: organize output into subdirectories (e.g. `landing-page/hero.png`)
 - `generations.jsonl` manifest: append-only log of every generation (prompt, params, model, cost, path)
@@ -29,6 +30,11 @@ All notable changes to this project are documented here. Every completed task ge
 - Seed: accepted without error
 - Imagen filtering: 3 models in discovery (was 6)
 - Rate limit startup warning: showing correctly
+- process_image resize: 1024x1024 → 256x256 thumbnail, sharp and correct
+- process_image format conversion: PNG → JPEG at quality 80
+- process_image background removal: threshold-based, white areas made transparent on B&W logo
+- process_image trim: whitespace removed, 256x256 → 154x62
+- process_image crop: 512x512 center quadrant extracted from 1024x1024
 
 ## [0.1.0] - 2026-04-01
 
