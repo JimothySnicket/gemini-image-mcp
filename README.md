@@ -2,12 +2,15 @@
 
 MCP server for Google Gemini image generation and editing. One tool, no bloat.
 
+Built on Gemini's native image generation API (`generateContent`), not the deprecated Imagen API. If you're migrating from Imagen (shutting down June 2026), this is what you move to — multi-turn editing, reference images, and all the features Imagen didn't have.
+
 ## Features
 
 - **Text-to-image** — describe what you want, get an image
 - **Image editing** — provide reference images and an editing instruction
+- **Multi-image input** — up to 14 reference images on gemini-3-pro
 - **Cost reporting** — every response includes token counts and estimated USD cost
-- **Multiple models** — gemini-2.5-flash-image, gemini-3-pro, gemini-3.1-flash
+- **Auto model discovery** — detects available models from your API key at startup
 - **Full aspect ratio support** — 1:1, 16:9, 9:16, 3:2, 2:3, 4:3, 3:4, 21:9
 - **Resolution control** — 1K, 2K, 4K
 

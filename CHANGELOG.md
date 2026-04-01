@@ -9,6 +9,8 @@ All notable changes to this project are documented here. Every completed task ge
 - Model validation on each request: if discovery succeeded, rejects unknown models with a list of what's available
 - New models appear automatically on next server restart — no code changes needed
 - Discovery failure is non-fatal: server starts anyway, errors surface on first request
+- Imagen models filtered out of discovery — deprecated June 2026, uses a different API (`generateImages`), not compatible with this server
+- README updated: positioned as the Gemini native wrapper for Imagen migration
 
 ### Verified (post-restart 2026-04-01)
 - Model discovery: found 6 image models including 3 Gemini native + 3 Imagen 4. Startup in ~200ms.

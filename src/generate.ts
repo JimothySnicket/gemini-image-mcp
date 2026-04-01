@@ -29,8 +29,10 @@ export interface GenerateImageResult {
   usage: UsageReport;
 }
 
-// Known image-capable model name fragments
+// Known image-capable model name fragments (Gemini native only)
 const IMAGE_MODEL_PATTERNS = ["image", "img"];
+// Imagen uses a different API (generateImages) and is deprecated June 2026
+const EXCLUDED_PREFIXES = ["imagen"];
 
 let cachedAvailableModels: string[] | null = null;
 
@@ -54,7 +56,8 @@ export async function discoverModels(): Promise<string[]> {
     for await (const model of pager) {
       const name = model.name?.replace("models/", "") ?? "";
       const isImageCapable = IMAGE_MODEL_PATTERNS.some((p) => name.includes(p));
-      if (isImageCapable) {
+      const isExcluded = EXCLUDED_PREFIXES.some((p) => name.startsWith(p));
+      if (isImageCapable && !isExcluded) {
         imageModels.push(name);
       }
     }
