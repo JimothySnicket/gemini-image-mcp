@@ -106,9 +106,9 @@ export async function processImage(
       const targetB = parseInt(hex.slice(4, 6), 16);
       const [targetH] = rgbToHsv(targetR, targetG, targetB);
 
-      // Tolerance maps to hue degrees
-      const hueHard = tolerance * 0.7;
-      const hueSoft = tolerance * 1.1;
+      // Tolerance maps to hue degrees — wide feather for anti-aliased edges
+      const hueHard = tolerance * 0.6;
+      const hueSoft = tolerance * 1.4;
       const minSat = 0.12;
       const minVal = 0.08;
 
@@ -156,16 +156,37 @@ export async function processImage(
       operations.push(`remove-bg(threshold:${threshold})`);
     }
 
-    // Rebuild as PNG, then smooth alpha channel to anti-alias edges
-    const keyedPng = await sharp(pixels, {
+    // Edge softening: 5 passes of 3x3 neighbourhood alpha averaging (inward only)
+    // Creates a smooth anti-aliased edge gradient without expanding outward
+    for (let pass = 0; pass < 5; pass++) {
+      const alphaSnapshot = new Uint8Array(info.width * info.height);
+      for (let i = 0; i < alphaSnapshot.length; i++) alphaSnapshot[i] = pixels[i * 4 + 3];
+
+      for (let y = 0; y < info.height; y++) {
+        for (let x = 0; x < info.width; x++) {
+          const idx = y * info.width + x;
+          const a = alphaSnapshot[idx];
+          if (a === 0) continue;
+
+          let sum = 0, count = 0;
+          for (let dy = -1; dy <= 1; dy++) {
+            for (let dx = -1; dx <= 1; dx++) {
+              const nx = x + dx, ny = y + dy;
+              if (nx >= 0 && nx < info.width && ny >= 0 && ny < info.height) {
+                sum += alphaSnapshot[ny * info.width + nx];
+                count++;
+              }
+            }
+          }
+          pixels[idx * 4 + 3] = Math.min(a, Math.round(sum / count));
+        }
+      }
+    }
+
+    // Rebuild pipeline from modified pixels
+    pipeline = sharp(pixels, {
       raw: { width: info.width, height: info.height, channels: 4 },
-    }).png().toBuffer();
-
-    // Extract alpha, blur it for smooth edges, recombine with RGB
-    const rgbBuf = await sharp(keyedPng).removeAlpha().png().toBuffer();
-    const alphaBuf = await sharp(keyedPng).extractChannel(3).blur(1.2).png().toBuffer();
-
-    pipeline = sharp(rgbBuf).joinChannel(alphaBuf);
+    });
   }
 
   if (params.crop) {
