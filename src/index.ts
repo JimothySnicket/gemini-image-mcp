@@ -2,7 +2,7 @@
 import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { StdioServerTransport } from "@modelcontextprotocol/sdk/server/stdio.js";
 import { z } from "zod/v4";
-import { generateImage } from "./generate.js";
+import { discoverModels, generateImage, getAvailableModels } from "./generate.js";
 import { log } from "./utils.js";
 
 const server = new McpServer({
@@ -106,6 +106,24 @@ async function main() {
   log.info(`  Model: ${defaultModel}`);
   log.info(`  Output: ${outputDir}`);
   log.info(`  Log level: ${logLevel}`);
+
+  // Discover available image models (also validates the API key)
+  try {
+    const models = await discoverModels();
+    log.info(`  Available image models (${models.length}): ${models.join(", ")}`);
+    if (models.length === 0) {
+      log.error("No image-capable models found for this API key.");
+    } else if (!models.includes(defaultModel)) {
+      log.error(
+        `Default model "${defaultModel}" not found in available models. ` +
+          `Available: ${models.join(", ")}`,
+      );
+    }
+  } catch (err) {
+    const msg = err instanceof Error ? err.message : String(err);
+    log.error(`Model discovery failed: ${msg}`);
+    log.info("Server will start anyway — model errors will surface on first request.");
+  }
 
   const transport = new StdioServerTransport();
   await server.connect(transport);

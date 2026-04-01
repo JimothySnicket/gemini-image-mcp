@@ -29,6 +29,11 @@ export interface GenerateImageResult {
   usage: UsageReport;
 }
 
+// Known image-capable model name fragments
+const IMAGE_MODEL_PATTERNS = ["image", "img"];
+
+let cachedAvailableModels: string[] | null = null;
+
 function getClient(): GoogleGenAI {
   const apiKey = process.env.GEMINI_API_KEY;
   if (!apiKey) {
@@ -38,6 +43,32 @@ function getClient(): GoogleGenAI {
     );
   }
   return new GoogleGenAI({ apiKey });
+}
+
+export async function discoverModels(): Promise<string[]> {
+  const ai = getClient();
+  const imageModels: string[] = [];
+
+  try {
+    const pager = await ai.models.list({ config: { pageSize: 100 } });
+    for await (const model of pager) {
+      const name = model.name?.replace("models/", "") ?? "";
+      const isImageCapable = IMAGE_MODEL_PATTERNS.some((p) => name.includes(p));
+      if (isImageCapable) {
+        imageModels.push(name);
+      }
+    }
+  } catch (err) {
+    const msg = err instanceof Error ? err.message : String(err);
+    throw new Error(`Failed to list models (is your API key valid?): ${msg}`);
+  }
+
+  cachedAvailableModels = imageModels;
+  return imageModels;
+}
+
+export function getAvailableModels(): string[] | null {
+  return cachedAvailableModels;
 }
 
 async function readImageAsInlineData(
@@ -73,6 +104,15 @@ export async function generateImage(
 ): Promise<GenerateImageResult> {
   const model = params.model ?? process.env.DEFAULT_MODEL ?? "gemini-2.5-flash-image";
   const timeoutMs = Number(process.env.REQUEST_TIMEOUT_MS) || 60_000;
+
+  // Validate model against discovered models if available
+  const available = getAvailableModels();
+  if (available && available.length > 0 && !available.includes(model)) {
+    throw new Error(
+      `Model "${model}" is not available. ` +
+        `Image-capable models for your API key: ${available.join(", ")}`,
+    );
+  }
 
   log.info(`Generating image with model=${model}`);
   log.debug("Params:", JSON.stringify(params, null, 2));

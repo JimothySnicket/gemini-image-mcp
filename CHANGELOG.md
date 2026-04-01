@@ -4,6 +4,12 @@ All notable changes to this project are documented here. Every completed task ge
 
 ## [0.1.0] - 2026-04-01
 
+### Added (post-test)
+- Auto model discovery at startup: calls `models.list` to find image-capable models, validates API key, logs available models
+- Model validation on each request: if discovery succeeded, rejects unknown models with a list of what's available
+- New models appear automatically on next server restart — no code changes needed
+- Discovery failure is non-fatal: server starts anyway, errors surface on first request
+
 ### Added
 - Project initialised: TypeScript + Bun + `@google/genai` v1.47.0 + `@modelcontextprotocol/sdk` v1.29.0
 - Single `generate_image` tool with parameter-driven routing (text-to-image or image editing based on inputs)
