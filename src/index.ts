@@ -155,11 +155,17 @@ server.registerTool(
         .optional(
           z.object({
             threshold: z.optional(z.number().int().min(0).max(255)).describe(
-              "Brightness threshold (0-255). Pixels above this become transparent. Default 240.",
+              "Brightness threshold (0-255). Pixels above this become transparent. Default 240. Ignored if color is set.",
+            ),
+            color: z.optional(z.string()).describe(
+              "Hex color to remove (e.g. '#00FF00' for green screen). Use with tolerance.",
+            ),
+            tolerance: z.optional(z.number().int().min(0).max(255)).describe(
+              "Color match tolerance (0-255). How different a pixel can be from the target color and still be removed. Default 50.",
             ),
           }),
         )
-        .describe("Remove near-white background (threshold-based). For complex backgrounds, use generate_image with AI editing."),
+        .describe("Remove background. Use threshold for white backgrounds, or color for chroma key (green screen)."),
       trim: z
         .optional(z.boolean())
         .describe("Auto-trim whitespace borders"),

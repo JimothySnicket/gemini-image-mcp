@@ -14,7 +14,7 @@ export interface ProcessImageParams {
     strategy?: "center" | "attention" | "entropy";
   };
   resize?: { width?: number; height?: number };
-  removeBackground?: { threshold?: number };
+  removeBackground?: { threshold?: number; color?: string; tolerance?: number };
   trim?: boolean;
   format?: "png" | "jpeg" | "webp";
   quality?: number;
@@ -60,29 +60,61 @@ export async function processImage(
   }
 
   if (params.removeBackground) {
-    const threshold = params.removeBackground.threshold ?? 240;
     // Get raw pixel data with alpha channel
     const { data, info } = await pipeline
       .ensureAlpha()
       .raw()
       .toBuffer({ resolveWithObject: true });
 
-    // Make near-white pixels transparent
     const pixels = Buffer.from(data);
-    for (let i = 0; i < pixels.length; i += 4) {
-      const r = pixels[i];
-      const g = pixels[i + 1];
-      const b = pixels[i + 2];
-      if (r >= threshold && g >= threshold && b >= threshold) {
-        pixels[i + 3] = 0;
+    const color = params.removeBackground.color;
+    const tolerance = params.removeBackground.tolerance ?? 50;
+
+    if (color) {
+      // Chroma key with soft edges: remove specific colour with alpha gradient
+      const hex = color.replace("#", "");
+      const targetR = parseInt(hex.slice(0, 2), 16);
+      const targetG = parseInt(hex.slice(2, 4), 16);
+      const targetB = parseInt(hex.slice(4, 6), 16);
+      // Feather zone: pixels within tolerance are fully transparent,
+      // pixels between tolerance and tolerance*1.5 get partial transparency
+      const hardEdge = tolerance;
+      const softEdge = Math.round(tolerance * 1.5);
+
+      for (let i = 0; i < pixels.length; i += 4) {
+        const dr = Math.abs(pixels[i] - targetR);
+        const dg = Math.abs(pixels[i + 1] - targetG);
+        const db = Math.abs(pixels[i + 2] - targetB);
+        const maxDiff = Math.max(dr, dg, db);
+
+        if (maxDiff <= hardEdge) {
+          // Close match: fully transparent
+          pixels[i + 3] = 0;
+        } else if (maxDiff <= softEdge) {
+          // Feather zone: partial transparency for smooth edges
+          const alpha = Math.round(((maxDiff - hardEdge) / (softEdge - hardEdge)) * 255);
+          pixels[i + 3] = Math.min(pixels[i + 3], alpha);
+        }
       }
+      operations.push(`chroma-key(${color},tolerance:${tolerance})`);
+    } else {
+      // Threshold: remove near-white pixels
+      const threshold = params.removeBackground.threshold ?? 240;
+      for (let i = 0; i < pixels.length; i += 4) {
+        const r = pixels[i];
+        const g = pixels[i + 1];
+        const b = pixels[i + 2];
+        if (r >= threshold && g >= threshold && b >= threshold) {
+          pixels[i + 3] = 0;
+        }
+      }
+      operations.push(`remove-bg(threshold:${threshold})`);
     }
 
     // Rebuild pipeline from modified pixels
     pipeline = sharp(pixels, {
       raw: { width: info.width, height: info.height, channels: 4 },
     });
-    operations.push(`remove-bg(threshold:${threshold})`);
   }
 
   if (params.crop) {
