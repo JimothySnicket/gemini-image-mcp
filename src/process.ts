@@ -1,6 +1,5 @@
 import sharp from "sharp";
 import { existsSync } from "fs";
-import { extname } from "path";
 import { log, resolveOutputDir, saveImage } from "./utils.js";
 
 // --- Chroma key helpers ---
@@ -157,10 +156,16 @@ export async function processImage(
       operations.push(`remove-bg(threshold:${threshold})`);
     }
 
-    // Rebuild pipeline from modified pixels
-    pipeline = sharp(pixels, {
+    // Rebuild as PNG, then smooth alpha channel to anti-alias edges
+    const keyedPng = await sharp(pixels, {
       raw: { width: info.width, height: info.height, channels: 4 },
-    });
+    }).png().toBuffer();
+
+    // Extract alpha, blur it for smooth edges, recombine with RGB
+    const rgbBuf = await sharp(keyedPng).removeAlpha().png().toBuffer();
+    const alphaBuf = await sharp(keyedPng).extractChannel(3).blur(1.2).png().toBuffer();
+
+    pipeline = sharp(rgbBuf).joinChannel(alphaBuf);
   }
 
   if (params.crop) {
