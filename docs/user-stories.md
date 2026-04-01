@@ -223,3 +223,41 @@ Results are appended here as tests are run. Format:
 | Crop: aspect ratio center | PASS | 1024x1024 → 1024x576 (16:9). Center crop, equal top/bottom trim |
 | Crop: aspect ratio attention | PASS | Same dimensions, shifted up to capture text + cup (most visually interesting) |
 | Crop: aspect ratio entropy | PASS | Same dimensions, captured text + cup area (most detailed region) |
+
+### Run: 2026-04-01 — Full v0.2 Regression
+
+**Generation — Real Use Cases**
+
+| Test | Result | Notes |
+|------|--------|-------|
+| Sprite sheet (warrior walk cycle) | PASS | 4 frames, transparent bg, consistent pixel art character |
+| Game texture (stone wall) | PASS | Tileable cobblestone, detailed, looks genuinely usable |
+| T-shirt mockup (POD) | PASS | Clean flat lay on grey background |
+| Mug mockup (POD) | PASS | Mountain line art rendered ON the mug in a cafe setting |
+| UI design primitives | FAIL then PASS | "A set of..." triggered text-only response. "Generate an image of..." worked. Prompt sensitivity. |
+| Session tracking | PASS | Running count 1→5, cost $0.04→$0.20 across batch |
+
+**Processing Pipelines**
+
+| Test | Result | Notes |
+|------|--------|-------|
+| Sprite trim + resize 128px | PASS | Trimmed whitespace, resized to 128x128 |
+| Texture → 16:9 center crop + webp | PASS | 1024x576 webp at quality 85 |
+| T-shirt bg removal + trim | PASS | Background removed, trimmed to 640x607 |
+
+**Error Handling Regression**
+
+| Test | Result | Notes |
+|------|--------|-------|
+| Invalid model | PASS | Lists available models from discovery |
+| Missing file (process_image) | PASS | "Image not found" with path |
+| Safety filter | PARTIAL | Model returned empty response (no text, no image, no finishReason). Generic fallback shown. Different behaviour to earlier test where model returned refusal text. Safety response is inconsistent across prompts. |
+
+**Prompt Sensitivity Findings**
+
+Phrases that can trigger text-only responses (no image):
+- "A set of..." — model describes instead of drawing
+- "Crop this..." — model explains cropping instead of generating
+- Any list-like instruction ("circles, rectangles, triangles")
+
+Fix: prefix with "Generate an image of..." or "Draw..." to force image output.
