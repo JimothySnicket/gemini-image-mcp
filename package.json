@@ -1,5 +1,5 @@
 {
-  "name": "gemini-image-mcp",
+  "name": "@jimothy-snicket/gemini-image-mcp",
   "version": "0.2.0",
   "description": "MCP server for Google Gemini image generation and editing",
   "type": "module",

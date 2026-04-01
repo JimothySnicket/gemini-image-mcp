@@ -66,7 +66,7 @@ Pick the method that matches how you use MCP:
 #### Claude Code (one-liner)
 
 ```bash
-claude mcp add gemini-image -- node /path/to/gemini-image-mcp/dist/index.js
+claude mcp add gemini-image -- npx -y @jimothy-snicket/gemini-image-mcp
 ```
 
 Claude Code will pick up `GEMINI_API_KEY` from your environment automatically.
@@ -79,8 +79,8 @@ Add to `.mcp.json` in your project root or `~/.claude/.mcp.json` for global acce
 {
   "mcpServers": {
     "gemini-image": {
-      "command": "node",
-      "args": ["/path/to/gemini-image-mcp/dist/index.js"],
+      "command": "npx",
+      "args": ["-y", "@jimothy-snicket/gemini-image-mcp"],
       "env": {
         "GEMINI_API_KEY": "${GEMINI_API_KEY}"
       }
@@ -90,14 +90,6 @@ Add to `.mcp.json` in your project root or `~/.claude/.mcp.json` for global acce
 ```
 
 The `${GEMINI_API_KEY}` syntax reads the value from your shell environment — your actual key never gets written into config files.
-
-#### Claude Code Plugin
-
-```bash
-/plugin install /path/to/gemini-image-mcp
-```
-
-This registers both the MCP server and a skill that teaches Claude when to generate images proactively. Your `GEMINI_API_KEY` environment variable is passed through automatically.
 
 #### Claude Desktop
 
@@ -110,8 +102,8 @@ Edit `claude_desktop_config.json`:
 {
   "mcpServers": {
     "gemini-image": {
-      "command": "node",
-      "args": ["/path/to/gemini-image-mcp/dist/index.js"],
+      "command": "npx",
+      "args": ["-y", "@jimothy-snicket/gemini-image-mcp"],
       "env": {
         "GEMINI_API_KEY": "${GEMINI_API_KEY}"
       }
@@ -124,7 +116,7 @@ Restart Claude Desktop after saving.
 
 #### Other MCP Clients
 
-Any client that supports stdio transport works. Point it at `node /path/to/dist/index.js` and pass `GEMINI_API_KEY` in the environment.
+Any client that supports stdio transport works. Point it at `npx -y @jimothy-snicket/gemini-image-mcp` and pass `GEMINI_API_KEY` in the environment.
 
 ### Security Notes
 
