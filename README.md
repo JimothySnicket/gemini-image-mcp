@@ -11,11 +11,49 @@ MCP server for Google Gemini image generation and editing. One tool, no bloat.
 - **Full aspect ratio support** — 1:1, 16:9, 9:16, 3:2, 2:3, 4:3, 3:4, 21:9
 - **Resolution control** — 1K, 2K, 4K
 
-## Quick Start
+## Setup
 
-### As an MCP server (any client)
+### 1. Get a Gemini API Key
 
-Add to your MCP client config (e.g. `.mcp.json` for Claude Code):
+Go to [Google AI Studio](https://aistudio.google.com/apikey) and create an API key. It's free to start with generous rate limits.
+
+### 2. Set the API Key
+
+The server reads your key from the `GEMINI_API_KEY` environment variable. Set it once so it's available in every session:
+
+**Windows (PowerShell — run as admin):**
+```powershell
+[System.Environment]::SetEnvironmentVariable('GEMINI_API_KEY', 'your-key-here', 'User')
+```
+Then restart your terminal.
+
+**macOS / Linux:**
+```bash
+echo 'export GEMINI_API_KEY="your-key-here"' >> ~/.bashrc
+source ~/.bashrc
+```
+(Use `~/.zshrc` if you're on zsh.)
+
+**Verify it's set:**
+```bash
+echo $GEMINI_API_KEY
+```
+
+### 3. Connect to Your MCP Client
+
+Pick the method that matches how you use MCP:
+
+#### Claude Code (one-liner)
+
+```bash
+claude mcp add gemini-image -- node /path/to/gemini-image-mcp/dist/index.js
+```
+
+Claude Code will pick up `GEMINI_API_KEY` from your environment automatically.
+
+#### Claude Code (manual `.mcp.json`)
+
+Add to `.mcp.json` in your project root or `~/.claude/.mcp.json` for global access:
 
 ```json
 {
@@ -31,21 +69,61 @@ Add to your MCP client config (e.g. `.mcp.json` for Claude Code):
 }
 ```
 
-### As a Claude Code plugin
+The `${GEMINI_API_KEY}` syntax reads the value from your shell environment — your actual key never gets written into config files.
+
+#### Claude Code Plugin
 
 ```bash
 /plugin install /path/to/gemini-image-mcp
 ```
 
+This registers both the MCP server and a skill that teaches Claude when to generate images proactively. Your `GEMINI_API_KEY` environment variable is passed through automatically.
+
+#### Claude Desktop
+
+Edit `claude_desktop_config.json`:
+
+- **macOS:** `~/Library/Application Support/Claude/claude_desktop_config.json`
+- **Windows:** `%APPDATA%\Claude\claude_desktop_config.json`
+
+```json
+{
+  "mcpServers": {
+    "gemini-image": {
+      "command": "node",
+      "args": ["/path/to/gemini-image-mcp/dist/index.js"],
+      "env": {
+        "GEMINI_API_KEY": "${GEMINI_API_KEY}"
+      }
+    }
+  }
+}
+```
+
+Restart Claude Desktop after saving.
+
+#### Other MCP Clients
+
+Any client that supports stdio transport works. Point it at `node /path/to/dist/index.js` and pass `GEMINI_API_KEY` in the environment.
+
+### Security Notes
+
+- Never commit your API key to version control. The `${GEMINI_API_KEY}` syntax in config files references your environment — the key itself stays in your shell profile.
+- If your `.mcp.json` is in a project repo, add it to `.gitignore` or use the global config at `~/.claude/.mcp.json` instead.
+- For extra security, you can use a wrapper script that reads the key from your OS keychain (macOS Keychain, Windows Credential Manager) and launches the server with it injected.
+
 ## Configuration
 
-| Variable | Required | Default | Description |
-|----------|----------|---------|-------------|
-| `GEMINI_API_KEY` | Yes | — | Google Gemini API key ([get one](https://aistudio.google.com/apikey)) |
-| `OUTPUT_DIR` | No | `~/gemini-images` | Default directory for saved images |
-| `DEFAULT_MODEL` | No | `gemini-2.5-flash-image` | Default Gemini model |
-| `LOG_LEVEL` | No | `info` | `debug`, `info`, or `error` |
-| `REQUEST_TIMEOUT_MS` | No | `60000` | API request timeout in milliseconds |
+All optional. The only required setup is `GEMINI_API_KEY` (covered above).
+
+| Variable | Default | Description |
+|----------|---------|-------------|
+| `OUTPUT_DIR` | `~/gemini-images` | Default directory for saved images |
+| `DEFAULT_MODEL` | `gemini-2.5-flash-image` | Default Gemini model |
+| `LOG_LEVEL` | `info` | `debug`, `info`, or `error` |
+| `REQUEST_TIMEOUT_MS` | `60000` | API request timeout in milliseconds |
+
+Set these the same way as `GEMINI_API_KEY`, or pass them in the `env` block of your MCP config.
 
 ## Tool: `generate_image`
 

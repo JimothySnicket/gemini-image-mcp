@@ -19,7 +19,6 @@ export interface GenerateImageParams {
   model?: string;
   aspectRatio?: string;
   resolution?: string;
-  personGeneration?: string;
   outputDir?: string;
 }
 
@@ -99,7 +98,7 @@ export async function generateImage(
   const imageConfig: Record<string, string> = {};
   if (params.aspectRatio) imageConfig.aspectRatio = params.aspectRatio;
   if (params.resolution) imageConfig.imageSize = params.resolution;
-  if (params.personGeneration) imageConfig.personGeneration = params.personGeneration;
+
 
   const startTime = Date.now();
 
@@ -147,27 +146,60 @@ export async function generateImage(
   }
 
   if (!imageData) {
-    // Check for safety filtering
+    // Log full response for debugging
+    log.debug("No image in response. Full response:", JSON.stringify({
+      candidates: response.candidates?.map((c) => ({
+        finishReason: c.finishReason,
+        safetyRatings: c.safetyRatings,
+        contentParts: c.content?.parts?.map((p) => ({
+          hasText: !!p.text,
+          text: p.text?.slice(0, 200),
+          hasInlineData: !!p.inlineData,
+        })),
+      })),
+      promptFeedback: response.promptFeedback,
+    }));
+
+    // Check for prompt-level blocking
+    const promptBlock = response.promptFeedback?.blockReason;
+    if (promptBlock) {
+      throw new Error(
+        `Prompt blocked by safety filter: ${promptBlock}. Try adjusting your prompt.`,
+      );
+    }
+
+    // Check for candidate-level safety filtering
     const candidate = response.candidates?.[0];
     const finishReason = candidate?.finishReason;
-    if (finishReason === "SAFETY") {
+    if (finishReason === "SAFETY" || finishReason === "RECITATION") {
       const ratings = candidate?.safetyRatings
         ?.map((r) => `${r.category}: ${r.probability}`)
         .join(", ");
       throw new Error(
-        `Image generation blocked by safety filter. Ratings: ${ratings ?? "unknown"}. ` +
-          "Try adjusting your prompt.",
+        `Image generation blocked by safety filter (${finishReason}). ` +
+          `Ratings: ${ratings ?? "unknown"}. Try adjusting your prompt.`,
       );
     }
+
+    // Check if model responded with text only (no error, just no image)
+    const textParts = responseParts.filter((p) => p.text);
+    if (textParts.length > 0) {
+      const modelText = textParts.map((p) => p.text).join(" ").slice(0, 300);
+      throw new Error(
+        `Model responded with text instead of an image: "${modelText}". ` +
+          "Try rephrasing your prompt to explicitly request image generation.",
+      );
+    }
+
     throw new Error(
-      "No image was returned by the API. The model may have responded with text only. " +
-        "Ensure your prompt asks for image generation.",
+      "No image was returned by the API and no clear reason was given. " +
+        "Check ~/gemini-images/gemini-mcp.log with LOG_LEVEL=debug for details.",
     );
   }
 
   // Save image
   const outputDir = resolveOutputDir(params.outputDir);
-  const imagePath = await saveImage(imageData, outputDir);
+  const imagePath = await saveImage(imageData, outputDir, imageMimeType);
 
   // Calculate usage
   const usage = calculateUsage(model, response.usageMetadata);

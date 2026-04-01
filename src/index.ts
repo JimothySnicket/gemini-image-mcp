@@ -44,9 +44,6 @@ server.registerTool(
       resolution: z
         .optional(z.enum(["1K", "2K", "4K"]))
         .describe("Image resolution. Defaults to 1K. 4K only available on gemini-3-pro"),
-      personGeneration: z
-        .optional(z.enum(["ALLOW_ALL", "ALLOW_ADULT", "ALLOW_NONE"]))
-        .describe("Person generation safety control"),
       outputDir: z
         .optional(z.string())
         .describe(
@@ -62,7 +59,6 @@ server.registerTool(
         model: args.model,
         aspectRatio: args.aspectRatio,
         resolution: args.resolution,
-        personGeneration: args.personGeneration,
         outputDir: args.outputDir,
       });
 
@@ -89,7 +85,12 @@ server.registerTool(
 );
 
 async function main() {
-  // Validate API key at startup
+  log.info("Gemini Image MCP server starting");
+  log.info(`  Node: ${process.version}`);
+  log.info(`  PID: ${process.pid}`);
+  log.info(`  CWD: ${process.cwd()}`);
+  log.info(`  GEMINI_API_KEY: ${process.env.GEMINI_API_KEY ? "set (" + process.env.GEMINI_API_KEY.length + " chars)" : "NOT SET"}`);
+
   if (!process.env.GEMINI_API_KEY) {
     log.error(
       "GEMINI_API_KEY environment variable is not set. " +
@@ -102,7 +103,6 @@ async function main() {
   const outputDir = process.env.OUTPUT_DIR ?? "~/gemini-images";
   const logLevel = process.env.LOG_LEVEL ?? "info";
 
-  log.info("Gemini Image MCP server starting");
   log.info(`  Model: ${defaultModel}`);
   log.info(`  Output: ${outputDir}`);
   log.info(`  Log level: ${logLevel}`);
