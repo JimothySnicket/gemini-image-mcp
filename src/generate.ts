@@ -139,7 +139,6 @@ export async function generateImage(
   if (params.aspectRatio) imageConfig.aspectRatio = params.aspectRatio;
   if (params.resolution) imageConfig.imageSize = params.resolution;
 
-
   const startTime = Date.now();
 
   // Call Gemini API with timeout
