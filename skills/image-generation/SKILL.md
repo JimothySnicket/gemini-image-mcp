@@ -92,9 +92,14 @@ Strategies: `center` (default, crops from center), `attention` (shifts crop towa
 }
 ```
 
+### Limitations of process_image
+- **Background removal is threshold-based** — it makes near-white pixels transparent. If the subject is also white/light (e.g. white t-shirt on white background), it will damage the subject. Use `generate_image` with "remove the background" for same-colour subjects.
+- **Trim removes all border whitespace** — don't use trim on sprite sheets or images where surrounding space is intentional. Trim + small resize = blurry results.
+- **Resize respects the input dimensions** — if you trim a 1024px image down to 200px of content, then resize to 128px, that's fine. But trimming a 1024px-wide sprite sheet with 4 characters and resizing to 128px means 32px per character.
+
 ### When to use which tool
-- **process_image** — crop, resize, format convert, threshold bg removal, trim. Free and instant.
-- **generate_image with images** — AI-powered editing: style changes, complex background removal, content-aware modifications. Costs ~$0.04 per operation.
+- **process_image** — crop, resize, format convert, threshold bg removal (on dark subjects with light backgrounds), trim. Free and instant.
+- **generate_image with images** — AI-powered editing: style changes, complex background removal (any background), content-aware modifications. Costs ~$0.04 per operation.
 
 ## Prompt Tips
 
