@@ -1,0 +1,15 @@
+{
+  "name": "gemini-image-mcp",
+  "version": "0.1.0",
+  "description": "Google Gemini image generation and editing via MCP",
+  "mcpServers": {
+    "gemini-image": {
+      "command": "node",
+      "args": ["${CLAUDE_PLUGIN_ROOT}/dist/index.js"],
+      "env": {
+        "GEMINI_API_KEY": "${GEMINI_API_KEY}"
+      }
+    }
+  },
+  "skills": ["skills/image-generation/SKILL.md"]
+}
