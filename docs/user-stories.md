@@ -220,3 +220,6 @@ Results are appended here as tests are run. Format:
 | Crop | PASS | 512x512 from center of 1024x1024, correct offset |
 | Subfolder nesting | PASS | `test-v02/processed/` created automatically |
 | Filename | PASS | All saved with requested names |
+| Crop: aspect ratio center | PASS | 1024x1024 → 1024x576 (16:9). Center crop, equal top/bottom trim |
+| Crop: aspect ratio attention | PASS | Same dimensions, shifted up to capture text + cup (most visually interesting) |
+| Crop: aspect ratio entropy | PASS | Same dimensions, captured text + cup area (most detailed region) |
