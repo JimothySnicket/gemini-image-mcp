@@ -212,6 +212,8 @@ function validateAndClean(
 
 // ── Config Loading ──────────────────────────────────────────────────
 
+let cachedConfig: GeminiImageConfig | null = null;
+
 function readJsoncFile(filePath: string): Record<string, unknown> | null {
   if (!existsSync(filePath)) return null;
   try {
@@ -245,6 +247,11 @@ export interface LoadConfigOpts {
  *   DEFAULTS → global config → local config → env vars
  */
 export function loadConfig(opts?: LoadConfigOpts): GeminiImageConfig {
+  // Return cached config if available and no custom paths (test override)
+  if (cachedConfig && !opts?.globalPath && !opts?.localPath) {
+    return cachedConfig;
+  }
+
   const globalPath =
     opts?.globalPath ?? join(homedir(), ".config", "gemini-image-mcp", "config.jsonc");
   const localPath =
@@ -300,7 +307,14 @@ export function loadConfig(opts?: LoadConfigOpts): GeminiImageConfig {
     config.outputDir = resolveTilde(config.outputDir);
   }
 
-  return Object.freeze(config as unknown as GeminiImageConfig);
+  const frozen = Object.freeze(config as unknown as GeminiImageConfig);
+
+  // Only cache when using default paths (not in tests)
+  if (!opts?.globalPath && !opts?.localPath) {
+    cachedConfig = frozen;
+  }
+
+  return frozen;
 }
 
 // ── Config Template ─────────────────────────────────────────────────
