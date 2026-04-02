@@ -57,7 +57,7 @@ server.registerTool(
         .describe("Image aspect ratio. Defaults to config value or 1:1"),
       resolution: z
         .optional(z.enum(["1K", "2K", "4K"]))
-        .describe("Image resolution. Defaults to config value or 1K. 4K only available on gemini-3-pro"),
+        .describe("Image resolution. Defaults to config value or 1K. 2K/4K only on gemini-3-pro and gemini-3.1-flash. gemini-2.5-flash is 1K only."),
       outputDir: z
         .optional(z.string())
         .describe(

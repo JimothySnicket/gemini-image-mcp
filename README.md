@@ -355,11 +355,11 @@ process_image → format: "webp" + quality: 85
 
 ## Models
 
-| Model | Strengths | Notes |
-|-------|-----------|-------|
-| `gemini-2.5-flash-image` | Fast, cheap (~$0.04/image) | Default. Good all-rounder |
-| `gemini-3-pro-image-preview` | Best quality, text rendering, 4K | Up to 14 reference images |
-| `gemini-3.1-flash-image-preview` | Speed + quality balance | Google Search grounding |
+| Model | Strengths | Resolution | Notes |
+|-------|-----------|------------|-------|
+| `gemini-2.5-flash-image` | Fast, cheap (~$0.04/image) | 1K only | Default. Deprecates Oct 2026 |
+| `gemini-3-pro-image-preview` | Best quality, text rendering | 1K, 2K, 4K | Up to 14 reference images |
+| `gemini-3.1-flash-image-preview` | Speed + quality balance | 512, 1K, 2K, 4K | Google Search grounding |
 
 ## Development
 

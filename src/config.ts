@@ -329,7 +329,9 @@ export const CONFIG_TEMPLATE = `{
   "outputDir": "~/gemini-images",
 
   // Default Gemini model for image generation
-  // Options: gemini-2.5-flash-image, gemini-3-pro-image-preview, gemini-3.1-flash-image-preview
+  // gemini-2.5-flash-image         — fast, ~$0.04/image, 1K only (deprecates Oct 2026)
+  // gemini-3.1-flash-image-preview  — fast, ~$0.08/image, up to 4K, search grounding
+  // gemini-3-pro-image-preview      — best quality, ~$0.16/image, up to 4K, 14 ref images
   "defaultModel": "gemini-2.5-flash-image",
 
   // Log level: "debug", "info", or "error"
@@ -349,10 +351,8 @@ export const CONFIG_TEMPLATE = `{
   "defaults": {
     "generate": {
       // "aspectRatio": "1:1",
-      // "resolution": "1K",
-      // "model": "gemini-2.5-flash-image",
-      // "seed": 42,
-      // "useSearchGrounding": false
+      // "resolution": "1K"
+      // Resolution options: 1K (all models), 2K/4K (3-pro and 3.1-flash only)
     },
     "process": {
       // "format": "png",
