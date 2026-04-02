@@ -8,12 +8,11 @@ import { log } from "./utils.js";
 export interface GenerateDefaults {
   aspectRatio?: string;
   resolution?: string;
-  model?: string;
-  seed?: number;
-  useSearchGrounding?: boolean;
 }
 
 export interface ProcessDefaults {
+  removeBackground?: { threshold?: number; color?: string; tolerance?: number };
+  trim?: boolean;
   format?: string;
   quality?: number;
 }
