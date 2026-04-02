@@ -1,6 +1,7 @@
 import sharp from "sharp";
 import { existsSync } from "fs";
 import { log, resolveOutputDir, saveImage } from "./utils.js";
+import { loadConfig } from "./config.js";
 
 // --- Chroma key helpers ---
 
@@ -277,7 +278,8 @@ export async function processImage(
   const outputMetadata = await sharp(outputBuffer).metadata();
 
   // Save
-  const outputDir = resolveOutputDir(params.outputDir);
+  const config = loadConfig();
+  const outputDir = resolveOutputDir(params.outputDir, config.outputDir);
   const base64 = outputBuffer.toString("base64");
   const imagePath = await saveImage({
     base64Data: base64,
