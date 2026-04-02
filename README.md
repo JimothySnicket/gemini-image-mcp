@@ -24,6 +24,18 @@ claude mcp add gemini-image -- npx -y @jimothy-snicket/gemini-image-mcp
 
 Requires a `GEMINI_API_KEY` environment variable — see [Setup](#setup) for details.
 
+**Set up a config file (optional):**
+
+```bash
+npx @jimothy-snicket/gemini-image-mcp --init
+```
+
+Creates `~/.gemini-image-mcp.json` with commented defaults. For project-specific overrides:
+
+```bash
+npx @jimothy-snicket/gemini-image-mcp --init --local
+```
+
 ## Features
 
 ### generate_image — AI-powered
@@ -161,6 +173,38 @@ All optional. The only required setup is `GEMINI_API_KEY` (covered above).
 Set these the same way as `GEMINI_API_KEY`, or pass them in the `env` block of your MCP config.
 
 **Rate limiting** is recommended when agents have access to this tool. An agent in a loop can generate images quickly — set `MAX_REQUESTS_PER_HOUR=20` and `MAX_COST_PER_HOUR=5` as sensible defaults.
+
+### Config File
+
+Instead of environment variables, you can use a JSON config file. Create one with:
+
+```bash
+npx @jimothy-snicket/gemini-image-mcp --init
+```
+
+This creates `~/.gemini-image-mcp.json` with all defaults and inline documentation. Edit it to set your preferences.
+
+**Priority:** env vars > local config (`.gemini-image-mcp.json` in CWD) > global config (`~/.gemini-image-mcp.json`) > defaults.
+
+You can also set per-tool defaults so every request uses your preferred settings:
+
+```json
+{
+  "defaultModel": "gemini-3.1-flash-image-preview",
+  "defaults": {
+    "generate": {
+      "aspectRatio": "16:9",
+      "resolution": "2K"
+    },
+    "process": {
+      "removeBackground": { "color": "#00FF00" },
+      "trim": true
+    }
+  }
+}
+```
+
+Per-request parameters always override config defaults.
 
 ## Tool: `generate_image`
 
