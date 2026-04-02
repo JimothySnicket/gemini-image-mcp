@@ -152,3 +152,154 @@ export function deepMerge<T extends Record<string, unknown>>(
 
   return result;
 }
+
+// ── Defaults ────────────────────────────────────────────────────────
+
+export const DEFAULTS: GeminiImageConfig = {
+  outputDir: "~/gemini-images",
+  defaultModel: "gemini-2.5-flash-image",
+  logLevel: "info",
+  requestTimeout: 60000,
+  sessionTimeout: 1800000,
+  maxRequestsPerHour: 0,
+  maxCostPerHour: 0,
+  defaults: {
+    generate: {},
+    process: {},
+  },
+};
+
+/** All keys that are valid at the top level of a config file. */
+const KNOWN_KEYS = new Set<string>(Object.keys(DEFAULTS));
+
+// ── Validation ──────────────────────────────────────────────────────
+
+const API_KEY_PATTERN = /api.?key/i;
+
+/**
+ * Validate and clean a raw parsed config object.
+ * - Strips any key matching /api.?key/i (with a warning).
+ * - Warns on unknown top-level keys and drops them.
+ * - Skips prototype pollution keys.
+ */
+function validateAndClean(
+  raw: Record<string, unknown>,
+  source: string,
+): Record<string, unknown> {
+  const cleaned: Record<string, unknown> = {};
+
+  for (const key of Object.keys(raw)) {
+    if (UNSAFE_KEYS.has(key)) continue;
+
+    if (API_KEY_PATTERN.test(key)) {
+      log.info(
+        `[config] WARNING: "${key}" found in ${source} — API keys must not be in config files. Stripped.`,
+      );
+      continue;
+    }
+
+    if (!KNOWN_KEYS.has(key)) {
+      log.info(
+        `[config] WARNING: unknown key "${key}" in ${source} — ignored.`,
+      );
+      continue;
+    }
+
+    cleaned[key] = raw[key];
+  }
+
+  return cleaned;
+}
+
+// ── Config Loading ──────────────────────────────────────────────────
+
+function readJsoncFile(filePath: string): Record<string, unknown> | null {
+  if (!existsSync(filePath)) return null;
+  try {
+    const raw = readFileSync(filePath, "utf-8");
+    const stripped = stripJsoncComments(raw);
+    return JSON.parse(stripped) as Record<string, unknown>;
+  } catch (err) {
+    const msg = err instanceof Error ? err.message : String(err);
+    log.error(`[config] Failed to parse ${filePath}: ${msg}`);
+    return null;
+  }
+}
+
+function resolveTilde(p: string): string {
+  if (p.startsWith("~/") || p === "~") {
+    return join(homedir(), p.slice(1));
+  }
+  return p;
+}
+
+export interface LoadConfigOpts {
+  globalPath?: string;
+  localPath?: string;
+}
+
+/**
+ * Load configuration from global then local JSONC files, apply env var
+ * overrides, resolve ~ in outputDir, and return a frozen config object.
+ *
+ * Merge order (later wins):
+ *   DEFAULTS → global config → local config → env vars
+ */
+export function loadConfig(opts?: LoadConfigOpts): GeminiImageConfig {
+  const globalPath =
+    opts?.globalPath ?? join(homedir(), ".config", "gemini-image-mcp", "config.jsonc");
+  const localPath =
+    opts?.localPath ?? join(process.cwd(), ".gemini-image-mcp.jsonc");
+
+  let config: Record<string, unknown> = { ...DEFAULTS, defaults: { ...DEFAULTS.defaults } };
+
+  // Load global config
+  const globalRaw = readJsoncFile(globalPath);
+  if (globalRaw) {
+    const cleaned = validateAndClean(globalRaw, globalPath);
+    config = deepMerge(config, cleaned);
+    log.debug(`[config] Loaded global config from ${globalPath}`);
+  }
+
+  // Load local config (overrides global)
+  const localRaw = readJsoncFile(localPath);
+  if (localRaw) {
+    const cleaned = validateAndClean(localRaw, localPath);
+    config = deepMerge(config, cleaned);
+    log.debug(`[config] Loaded local config from ${localPath}`);
+  }
+
+  // Env var overrides (highest priority)
+  if (process.env.OUTPUT_DIR) {
+    config.outputDir = process.env.OUTPUT_DIR;
+  }
+  if (process.env.DEFAULT_MODEL) {
+    config.defaultModel = process.env.DEFAULT_MODEL;
+  }
+  if (process.env.LOG_LEVEL) {
+    config.logLevel = process.env.LOG_LEVEL;
+  }
+  if (process.env.REQUEST_TIMEOUT_MS) {
+    const val = Number(process.env.REQUEST_TIMEOUT_MS);
+    if (!isNaN(val)) config.requestTimeout = val;
+  }
+  if (process.env.SESSION_TIMEOUT_MS) {
+    const val = Number(process.env.SESSION_TIMEOUT_MS);
+    if (!isNaN(val)) config.sessionTimeout = val;
+  }
+  if (process.env.MAX_REQUESTS_PER_HOUR) {
+    const val = Number(process.env.MAX_REQUESTS_PER_HOUR);
+    if (!isNaN(val)) config.maxRequestsPerHour = val;
+  }
+  if (process.env.MAX_COST_PER_HOUR) {
+    const val = Number(process.env.MAX_COST_PER_HOUR);
+    if (!isNaN(val)) config.maxCostPerHour = val;
+  }
+
+  // Resolve ~ in outputDir
+  if (typeof config.outputDir === "string") {
+    config.outputDir = resolveTilde(config.outputDir);
+  }
+
+  return Object.freeze(config as unknown as GeminiImageConfig);
+}
