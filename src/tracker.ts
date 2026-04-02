@@ -1,5 +1,6 @@
 import { appendFileSync, existsSync, mkdirSync, readFileSync } from "fs";
 import { join } from "path";
+import { loadConfig } from "./config.js";
 import type { UsageReport } from "./pricing.js";
 import { log, resolveOutputDir } from "./utils.js";
 
@@ -32,7 +33,8 @@ let sessionGenerations = 0;
 let sessionCostCents = 0;
 
 function getManifestPath(): string {
-  const dir = resolveOutputDir();
+  const config = loadConfig();
+  const dir = resolveOutputDir(undefined, config.outputDir);
   return join(dir, "generations.jsonl");
 }
 
@@ -43,10 +45,11 @@ function parseCost(cost: string): number {
 
 export function appendManifest(entry: ManifestEntry): void {
   try {
-    const dir = resolveOutputDir();
+    const config = loadConfig();
+    const dir = resolveOutputDir(undefined, config.outputDir);
     mkdirSync(dir, { recursive: true });
     const line = JSON.stringify(entry) + "\n";
-    appendFileSync(getManifestPath(), line);
+    appendFileSync(join(dir, "generations.jsonl"), line);
   } catch (err) {
     log.error("Failed to write manifest:", err instanceof Error ? err.message : String(err));
   }
@@ -81,8 +84,9 @@ function countRecentGenerations(): { count: number; costCents: number } {
 }
 
 export function checkRateLimit(): void {
-  const maxPerHour = Number(process.env.MAX_REQUESTS_PER_HOUR) || 0;
-  const maxCostPerHour = Number(process.env.MAX_COST_PER_HOUR) || 0;
+  const config = loadConfig();
+  const maxPerHour = config.maxRequestsPerHour;
+  const maxCostPerHour = config.maxCostPerHour;
 
   if (maxPerHour === 0 && maxCostPerHour === 0) return;
 
@@ -110,8 +114,9 @@ export function recordGeneration(usage: UsageReport): void {
 }
 
 export function getSessionStats(): SessionStats {
-  const maxPerHour = Number(process.env.MAX_REQUESTS_PER_HOUR) || 0;
-  const maxCostPerHour = Number(process.env.MAX_COST_PER_HOUR) || 0;
+  const config = loadConfig();
+  const maxPerHour = config.maxRequestsPerHour;
+  const maxCostPerHour = config.maxCostPerHour;
   const recent = countRecentGenerations();
 
   return {
