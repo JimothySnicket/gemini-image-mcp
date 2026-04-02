@@ -14,8 +14,12 @@ const LOG_LEVELS: Record<LogLevel, number> = {
   error: 2,
 };
 
-const currentLevel: LogLevel =
+let currentLevel: LogLevel =
   (process.env.LOG_LEVEL as LogLevel) ?? "info";
+
+export function setLogLevel(level: LogLevel): void {
+  currentLevel = level;
+}
 
 const LOG_DIR = join(homedir(), "gemini-images");
 const LOG_FILE = join(LOG_DIR, "gemini-mcp.log");
@@ -63,9 +67,12 @@ function defaultOutputDir(): string {
   return join(homedir(), "gemini-images");
 }
 
-export function resolveOutputDir(perRequest?: string): string {
+export function resolveOutputDir(perRequest?: string, defaultDir?: string): string {
   if (perRequest) return resolve(perRequest);
-  return defaultOutputDir();
+  if (defaultDir) return resolve(defaultDir);
+  // Fallback for backwards compat during transition
+  if (process.env.OUTPUT_DIR) return resolve(process.env.OUTPUT_DIR);
+  return join(homedir(), "gemini-images");
 }
 
 /** Ensure a resolved path is under the allowed base directory. Prevents path traversal. */
