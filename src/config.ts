@@ -1,6 +1,6 @@
 import { existsSync, readFileSync, writeFileSync, mkdirSync } from "fs";
 import { homedir } from "os";
-import { join, resolve, dirname } from "path";
+import { join, dirname } from "path";
 import { log } from "./utils.js";
 
 // ── Types ───────────────────────────────────────────────────────────
