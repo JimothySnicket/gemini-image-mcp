@@ -303,3 +303,76 @@ export function loadConfig(opts?: LoadConfigOpts): GeminiImageConfig {
 
   return Object.freeze(config as unknown as GeminiImageConfig);
 }
+
+// ── Config Template ─────────────────────────────────────────────────
+
+export const CONFIG_TEMPLATE = `{
+  // gemini-image-mcp configuration
+  // Docs: https://github.com/JimothySnicket/gemini-image-mcp
+
+  // Directory where generated/processed images are saved
+  // Supports ~ for home directory
+  "outputDir": "~/gemini-images",
+
+  // Default Gemini model for image generation
+  // Options: gemini-2.5-flash-image, gemini-3-pro-image-preview, gemini-3.1-flash-image-preview
+  "defaultModel": "gemini-2.5-flash-image",
+
+  // Log level: "debug", "info", or "error"
+  "logLevel": "info",
+
+  // Timeout for a single API request (ms)
+  "requestTimeout": 60000,
+
+  // Timeout for multi-turn editing sessions (ms)
+  "sessionTimeout": 1800000,
+
+  // Rate limiting (0 = unlimited)
+  "maxRequestsPerHour": 0,
+  "maxCostPerHour": 0,
+
+  // Per-tool default parameters
+  "defaults": {
+    "generate": {
+      // "aspectRatio": "1:1",
+      // "resolution": "1K",
+      // "model": "gemini-2.5-flash-image",
+      // "seed": 42,
+      // "useSearchGrounding": false
+    },
+    "process": {
+      // "format": "png",
+      // "quality": 90
+    }
+  }
+}
+`;
+
+// ── --init Scaffolding ──────────────────────────────────────────────
+
+export interface InitConfigOpts {
+  targetPath: string;
+  force?: boolean;
+}
+
+/**
+ * Write the config template to targetPath.
+ * Throws if the file already exists unless force is true.
+ * Creates parent directories as needed.
+ */
+export function initConfig(opts: InitConfigOpts): void {
+  const { targetPath, force } = opts;
+
+  if (existsSync(targetPath) && !force) {
+    throw new Error(
+      `Config file already exists: ${targetPath}\nUse --force to overwrite.`,
+    );
+  }
+
+  // Ensure parent directory exists
+  const dir = dirname(targetPath);
+  mkdirSync(dir, { recursive: true });
+
+  writeFileSync(targetPath, CONFIG_TEMPLATE, "utf-8");
+  log.info(`[config] Config file written to ${targetPath}`);
+}

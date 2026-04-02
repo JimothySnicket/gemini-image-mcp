@@ -6,6 +6,8 @@ import {
   stripJsoncComments,
   deepMerge,
   loadConfig,
+  initConfig,
+  CONFIG_TEMPLATE,
   DEFAULTS,
   type GeminiImageConfig,
 } from "./config.js";
@@ -321,5 +323,93 @@ describe("loadConfig", () => {
     expect(() => {
       (config as any).defaultModel = "hacked";
     }).toThrow();
+  });
+});
+
+// ── Task 3: initConfig ──────────────────────────────────────────────
+
+describe("initConfig", () => {
+  let tmpDir: string;
+  let targetPath: string;
+  const savedEnv: Record<string, string | undefined> = {};
+  const ENV_KEYS = [
+    "OUTPUT_DIR",
+    "DEFAULT_MODEL",
+    "LOG_LEVEL",
+    "REQUEST_TIMEOUT_MS",
+    "SESSION_TIMEOUT_MS",
+    "MAX_REQUESTS_PER_HOUR",
+    "MAX_COST_PER_HOUR",
+  ];
+
+  beforeEach(() => {
+    tmpDir = join(tmpdir(), `init-test-${Date.now()}-${Math.random().toString(36).slice(2)}`);
+    mkdirSync(tmpDir, { recursive: true });
+    targetPath = join(tmpDir, "config.jsonc");
+
+    for (const key of ENV_KEYS) {
+      savedEnv[key] = process.env[key];
+      delete process.env[key];
+    }
+  });
+
+  afterEach(() => {
+    for (const key of ENV_KEYS) {
+      if (savedEnv[key] !== undefined) {
+        process.env[key] = savedEnv[key];
+      } else {
+        delete process.env[key];
+      }
+    }
+    try {
+      rmSync(tmpDir, { recursive: true, force: true });
+    } catch {
+      // best effort
+    }
+  });
+
+  test("creates config file with comments", () => {
+    initConfig({ targetPath });
+    expect(existsSync(targetPath)).toBe(true);
+    const content = require("fs").readFileSync(targetPath, "utf-8");
+    // Should contain JSONC comments
+    expect(content).toContain("//");
+  });
+
+  test("generated file is parseable after comment stripping", () => {
+    initConfig({ targetPath });
+    const content = require("fs").readFileSync(targetPath, "utf-8");
+    const stripped = stripJsoncComments(content);
+    const parsed = JSON.parse(stripped);
+    // Should have the expected default keys
+    expect(parsed.outputDir).toBeDefined();
+    expect(parsed.defaultModel).toBeDefined();
+    expect(parsed.logLevel).toBeDefined();
+  });
+
+  test("refuses to overwrite without force", () => {
+    writeFileSync(targetPath, "existing content");
+    expect(() => initConfig({ targetPath })).toThrow();
+  });
+
+  test("overwrites with force", () => {
+    writeFileSync(targetPath, "old content");
+    initConfig({ targetPath, force: true });
+    const content = require("fs").readFileSync(targetPath, "utf-8");
+    expect(content).toContain("//");
+    expect(content).not.toBe("old content");
+  });
+
+  test("round-trips through loadConfig", () => {
+    initConfig({ targetPath });
+    // Load the generated file as a global config
+    const config = loadConfig({
+      globalPath: targetPath,
+      localPath: join(tmpDir, "nonexistent.jsonc"),
+    });
+    expect(config.defaultModel).toBe(DEFAULTS.defaultModel);
+    expect(config.logLevel).toBe(DEFAULTS.logLevel);
+    expect(config.requestTimeout).toBe(DEFAULTS.requestTimeout);
+    expect(config.maxRequestsPerHour).toBe(DEFAULTS.maxRequestsPerHour);
   });
 });
