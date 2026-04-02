@@ -4,7 +4,8 @@ import { StdioServerTransport } from "@modelcontextprotocol/sdk/server/stdio.js"
 import { z } from "zod/v4";
 import { discoverModels, generateImage, getAvailableModels } from "./generate.js";
 import { processImage } from "./process.js";
-import { log } from "./utils.js";
+import { loadConfig, initConfig } from "./config.js";
+import { log, setLogLevel } from "./utils.js";
 
 const server = new McpServer({
   name: "gemini-image-mcp",
@@ -80,12 +81,13 @@ server.registerTool(
   },
   async (args) => {
     try {
+      const config = loadConfig();
       const result = await generateImage({
         prompt: args.prompt,
         images: args.images,
         model: args.model,
-        aspectRatio: args.aspectRatio,
-        resolution: args.resolution,
+        aspectRatio: args.aspectRatio ?? config.defaults.generate.aspectRatio,
+        resolution: args.resolution ?? config.defaults.generate.resolution,
         outputDir: args.outputDir,
         filename: args.filename,
         subfolder: args.subfolder,
@@ -189,14 +191,15 @@ server.registerTool(
   },
   async (args) => {
     try {
+      const config = loadConfig();
       const result = await processImage({
         imagePath: args.imagePath,
         crop: args.crop,
         resize: args.resize,
         removeBackground: args.removeBackground,
         trim: args.trim,
-        format: args.format,
-        quality: args.quality,
+        format: (args.format ?? config.defaults.process.format) as "png" | "jpeg" | "webp" | undefined,
+        quality: args.quality ?? config.defaults.process.quality,
         outputDir: args.outputDir,
         filename: args.filename,
         subfolder: args.subfolder,
@@ -222,6 +225,37 @@ server.registerTool(
 );
 
 async function main() {
+  // Handle --init before anything else (CLI mode, not MCP mode)
+  if (process.argv.includes("--init")) {
+    const local = process.argv.includes("--local");
+    const force = process.argv.includes("--force");
+    const { homedir } = await import("os");
+    const { join } = await import("path");
+    const targetPath = local
+      ? join(process.cwd(), ".gemini-image-mcp.json")
+      : join(homedir(), ".gemini-image-mcp.json");
+
+    try {
+      initConfig({ targetPath, force });
+      console.log(`\nConfig file created: ${targetPath}\n`);
+      console.log("Edit this file to set your defaults. All fields are optional —");
+      console.log("anything you don't set will use the built-in default.\n");
+      console.log("Environment variables always override config file values.\n");
+      if (!local) {
+        console.log("For project-specific overrides, also run:");
+        console.log("  npx @jimothy-snicket/gemini-image-mcp --init --local\n");
+      }
+    } catch (err) {
+      console.error(err instanceof Error ? err.message : String(err));
+      process.exit(1);
+    }
+    process.exit(0);
+  }
+
+  // Load config and update log level
+  const config = loadConfig();
+  setLogLevel(config.logLevel as "debug" | "info" | "error");
+
   log.info("Gemini Image MCP server starting");
   log.info(`  Node: ${process.version}`);
   log.info(`  PID: ${process.pid}`);
@@ -236,20 +270,13 @@ async function main() {
     process.exit(1);
   }
 
-  const defaultModel = process.env.DEFAULT_MODEL ?? "gemini-2.5-flash-image";
-  const outputDir = process.env.OUTPUT_DIR ?? "~/gemini-images";
-  const logLevel = process.env.LOG_LEVEL ?? "info";
-
-  const maxReqHour = Number(process.env.MAX_REQUESTS_PER_HOUR) || 0;
-  const maxCostHour = Number(process.env.MAX_COST_PER_HOUR) || 0;
-
-  log.info(`  Model: ${defaultModel}`);
-  log.info(`  Output: ${outputDir}`);
-  log.info(`  Log level: ${logLevel}`);
-  if (maxReqHour > 0 || maxCostHour > 0) {
-    log.info(`  Rate limits: ${maxReqHour > 0 ? maxReqHour + " req/hr" : "unlimited"}, ${maxCostHour > 0 ? "$" + maxCostHour + "/hr" : "unlimited cost"}`);
+  log.info(`  Model: ${config.defaultModel}`);
+  log.info(`  Output: ${config.outputDir}`);
+  log.info(`  Log level: ${config.logLevel}`);
+  if (config.maxRequestsPerHour > 0 || config.maxCostPerHour > 0) {
+    log.info(`  Rate limits: ${config.maxRequestsPerHour > 0 ? config.maxRequestsPerHour + " req/hr" : "unlimited"}, ${config.maxCostPerHour > 0 ? "$" + config.maxCostPerHour + "/hr" : "unlimited cost"}`);
   } else {
-    log.info("  Rate limits: none configured. Set MAX_REQUESTS_PER_HOUR / MAX_COST_PER_HOUR to limit.");
+    log.info("  Rate limits: none configured. Set maxRequestsPerHour / maxCostPerHour in config or env.");
   }
 
   // Discover available image models (also validates the API key)
@@ -258,9 +285,9 @@ async function main() {
     log.info(`  Available image models (${models.length}): ${models.join(", ")}`);
     if (models.length === 0) {
       log.error("No image-capable models found for this API key.");
-    } else if (!models.includes(defaultModel)) {
+    } else if (!models.includes(config.defaultModel)) {
       log.error(
-        `Default model "${defaultModel}" not found in available models. ` +
+        `Default model "${config.defaultModel}" not found in available models. ` +
           `Available: ${models.join(", ")}`,
       );
     }
