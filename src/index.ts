@@ -7,10 +7,22 @@ import { processImage } from "./process.js";
 import { loadConfig, initConfig } from "./config.js";
 import { log, setLogLevel } from "./utils.js";
 
-const server = new McpServer({
-  name: "gemini-image-mcp",
-  version: "0.2.0",
-});
+const server = new McpServer(
+  {
+    name: "gemini-image-mcp",
+    version: "0.2.0",
+  },
+  {
+    instructions:
+      "Gemini image generation and local image processing. Two tools: generate_image (AI-powered, costs money) " +
+      "and process_image (local via sharp, free). " +
+      "Configuration can be set via a JSON config file — run `npx @jimothy-snicket/gemini-image-mcp --init` to create " +
+      "~/.gemini-image-mcp.json with commented defaults. A local .gemini-image-mcp.json in the project directory " +
+      "can override global settings. Priority: per-request params > env vars > local config > global config > defaults. " +
+      "Config supports per-tool defaults (e.g. default aspect ratio, resolution, or always removing backgrounds) " +
+      "so users don't have to specify them every time.",
+  },
+);
 
 server.registerTool(
   "generate_image",
@@ -42,14 +54,14 @@ server.registerTool(
         .optional(
           z.enum(["1:1", "16:9", "9:16", "3:2", "2:3", "4:3", "3:4", "21:9"]),
         )
-        .describe("Image aspect ratio. Defaults to 1:1"),
+        .describe("Image aspect ratio. Defaults to config value or 1:1"),
       resolution: z
         .optional(z.enum(["1K", "2K", "4K"]))
-        .describe("Image resolution. Defaults to 1K. 4K only available on gemini-3-pro"),
+        .describe("Image resolution. Defaults to config value or 1K. 4K only available on gemini-3-pro"),
       outputDir: z
         .optional(z.string())
         .describe(
-          "Directory to save the image. Defaults to OUTPUT_DIR env var or ~/gemini-images",
+          "Directory to save the image. Defaults to config file outputDir, OUTPUT_DIR env var, or ~/gemini-images",
         ),
       filename: z
         .optional(z.string())
@@ -180,7 +192,7 @@ server.registerTool(
         .describe("Output quality for JPEG/WebP (1-100). Default 90."),
       outputDir: z
         .optional(z.string())
-        .describe("Directory to save. Defaults to OUTPUT_DIR env var or ~/gemini-images"),
+        .describe("Directory to save. Defaults to config file outputDir, OUTPUT_DIR env var, or ~/gemini-images"),
       filename: z
         .optional(z.string())
         .describe("Base name for saved file. Auto-versioned if duplicate."),
