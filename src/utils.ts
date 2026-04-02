@@ -62,11 +62,6 @@ export const log = {
 
 // --- File Utilities ---
 
-function defaultOutputDir(): string {
-  if (process.env.OUTPUT_DIR) return resolve(process.env.OUTPUT_DIR);
-  return join(homedir(), "gemini-images");
-}
-
 export function resolveOutputDir(perRequest?: string, defaultDir?: string): string {
   if (perRequest) return resolve(perRequest);
   if (defaultDir) return resolve(defaultDir);

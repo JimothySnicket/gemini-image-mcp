@@ -20,7 +20,7 @@ export interface ProcessDefaults {
 export interface GeminiImageConfig {
   outputDir: string;
   defaultModel: string;
-  logLevel: string;
+  logLevel: "debug" | "info" | "error";
   requestTimeout: number;
   sessionTimeout: number;
   maxRequestsPerHour: number;

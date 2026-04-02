@@ -266,7 +266,7 @@ async function main() {
 
   // Load config and update log level
   const config = loadConfig();
-  setLogLevel(config.logLevel as "debug" | "info" | "error");
+  setLogLevel(config.logLevel);
 
   log.info("Gemini Image MCP server starting");
   log.info(`  Node: ${process.version}`);
