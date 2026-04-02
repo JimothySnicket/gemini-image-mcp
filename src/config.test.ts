@@ -85,6 +85,20 @@ describe("stripJsoncComments", () => {
     expect(stripJsoncComments("")).toBe("");
   });
 
+  test("strips trailing commas left by removed comments", () => {
+    const input = '{\n  "a": 1,\n  // "b": 2,\n  // "c": 3\n}';
+    const result = stripJsoncComments(input);
+    const parsed = JSON.parse(result);
+    expect(parsed).toEqual({ a: 1 });
+  });
+
+  test("strips trailing comma before closing bracket", () => {
+    const input = '[\n  "keep",\n  // "remove"\n]';
+    const result = stripJsoncComments(input);
+    const parsed = JSON.parse(result);
+    expect(parsed).toEqual(["keep"]);
+  });
+
   test("handles input with no comments", () => {
     const input = `{"key": "value"}`;
     expect(stripJsoncComments(input)).toBe(input);

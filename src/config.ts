@@ -105,7 +105,8 @@ export function stripJsoncComments(input: string): string {
     i++;
   }
 
-  return result;
+  // Strip trailing commas (left behind when commented-out lines follow a real value)
+  return result.replace(/,(\s*[}\]])/g, "$1");
 }
 
 // ── Deep Merge ──────────────────────────────────────────────────────
