@@ -8,3 +8,5 @@ test-output/
 bun.lock
 nul
 mcp-publisher.exe
+docs/
+.mcpregistry_*

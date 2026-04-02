@@ -2,6 +2,41 @@
 
 All notable changes to this project.
 
+## [0.3.0] - 2026-04-02
+
+### Added
+- Config file support: JSONC config files with `//` comments for persistent defaults
+  - Global config: `~/.gemini-image-mcp.json`
+  - Local config: `.gemini-image-mcp.json` in project directory
+  - Priority chain: per-request params > env vars > local config > global config > defaults
+- `--init` CLI command: generates a commented config file with all defaults documented inline
+  - `--init --local` for project-specific config
+  - `--force` to overwrite existing config
+- Per-tool defaults in config: set default aspect ratio, resolution, background removal, trim, format, quality
+- MCP server `instructions` field: clients now receive config file documentation on connect
+- New module: `src/config.ts` — centralized config loading, JSONC parsing, validation, caching
+- 32 tests for config module (stripJsoncComments, deepMerge, loadConfig, initConfig)
+
+### Changed
+- All modules now read settings from centralized config instead of `process.env` directly
+- Parameter descriptions reference config file defaults alongside env vars
+- Model table in README now includes resolution support per model
+- `resolveOutputDir()` accepts explicit default directory parameter
+
+### Security
+- API keys rejected from config files with warning (config files get committed to repos)
+- String-aware JSONC comment stripping (won't mangle URLs in quoted strings)
+- Prototype pollution guard on config deep merge (`__proto__`, `constructor`, `prototype`)
+- Unknown config keys warned and dropped (prevents unexpected data injection)
+
+### Fixed
+- Trailing commas left by JSONC comment removal now stripped (prevents parse failures when commented-out lines follow real values)
+
+### Docs
+- README: added config file section, `--init` instructions, per-model resolution support column
+- Config template includes model pricing and resolution compatibility notes
+- gemini-2.5-flash documented as 1K only (deprecates Oct 2026)
+
 ## [0.2.0] - 2026-04-01
 
 ### Added
