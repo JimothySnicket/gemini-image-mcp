@@ -253,9 +253,9 @@ export function loadConfig(opts?: LoadConfigOpts): GeminiImageConfig {
   }
 
   const globalPath =
-    opts?.globalPath ?? join(homedir(), ".config", "gemini-image-mcp", "config.jsonc");
+    opts?.globalPath ?? join(homedir(), ".gemini-image-mcp.json");
   const localPath =
-    opts?.localPath ?? join(process.cwd(), ".gemini-image-mcp.jsonc");
+    opts?.localPath ?? join(process.cwd(), ".gemini-image-mcp.json");
 
   let config: Record<string, unknown> = { ...DEFAULTS, defaults: { ...DEFAULTS.defaults } };
 
