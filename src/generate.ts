@@ -1,6 +1,7 @@
 import { GoogleGenAI, type Content, type Part } from "@google/genai";
 import { readFile, stat } from "fs/promises";
 import { extname } from "path";
+import { loadConfig } from "./config.js";
 import { calculateUsage, type UsageReport } from "./pricing.js";
 import {
   appendManifest,
@@ -60,14 +61,18 @@ interface ConversationSession {
 }
 
 const sessions = new Map<string, ConversationSession>();
-const SESSION_TIMEOUT = Number(process.env.SESSION_TIMEOUT_MS) || 30 * 60 * 1000;
 const MAX_SESSION_TURNS = 10;
 
+function getSessionTimeout(): number {
+  return loadConfig().sessionTimeout;
+}
+
 function cleanupSessions(): void {
+  const timeout = getSessionTimeout();
   const now = Date.now();
   for (const [id, session] of sessions) {
-    if (now - session.lastAccessed > SESSION_TIMEOUT) {
-      log.info(`Session ${id} expired after ${SESSION_TIMEOUT / 1000}s inactivity`);
+    if (now - session.lastAccessed > timeout) {
+      log.info(`Session ${id} expired after ${timeout / 1000}s inactivity`);
       sessions.delete(id);
     }
   }
@@ -154,8 +159,9 @@ async function readImageAsInlineData(
 export async function generateImage(
   params: GenerateImageParams,
 ): Promise<GenerateImageResult> {
-  const model = params.model ?? process.env.DEFAULT_MODEL ?? "gemini-2.5-flash-image";
-  const timeoutMs = Number(process.env.REQUEST_TIMEOUT_MS) || 60_000;
+  const config = loadConfig();
+  const model = params.model ?? config.defaultModel;
+  const timeoutMs = config.requestTimeout;
 
   // Check rate limits before doing anything
   checkRateLimit();
@@ -349,7 +355,7 @@ export async function generateImage(
   }
 
   // Save image
-  const outputDir = resolveOutputDir(params.outputDir);
+  const outputDir = resolveOutputDir(params.outputDir, config.outputDir);
   const imagePath = await saveImage({
     base64Data: imageData,
     outputDir,
