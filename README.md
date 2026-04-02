@@ -4,6 +4,26 @@ MCP server for Google Gemini image generation, editing, and processing. Two tool
 
 Built on Gemini's native image generation API (`generateContent`), not the deprecated Imagen API. If you're migrating from Imagen (shutting down June 2026), this is what you move to — multi-turn editing, reference images, and all the features Imagen didn't have.
 
+## Install
+
+```bash
+npm install -g @jimothy-snicket/gemini-image-mcp
+```
+
+Or use directly with npx:
+
+```bash
+npx -y @jimothy-snicket/gemini-image-mcp
+```
+
+**Claude Code (one command):**
+
+```bash
+claude mcp add gemini-image -- npx -y @jimothy-snicket/gemini-image-mcp
+```
+
+Requires a `GEMINI_API_KEY` environment variable — see [Setup](#setup) for details.
+
 ## Features
 
 ### generate_image — AI-powered
