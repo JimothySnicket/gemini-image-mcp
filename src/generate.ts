@@ -282,7 +282,8 @@ export async function generateImage(
           "Try a simpler prompt or increase REQUEST_TIMEOUT_MS.",
       );
     }
-    // Sanitize error to avoid leaking request internals (URLs, keys)
+    // Gemini API errors from @google/genai include the response body (status + JSON);
+    // no API keys are present (the key travels as a request header, not in error messages).
     const msg = err instanceof Error ? err.message : String(err);
     throw new Error(`Gemini API error: ${msg}`);
   } finally {
