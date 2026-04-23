@@ -50,6 +50,10 @@ const IMAGE_MODEL_PATTERNS = ["image", "img"];
 // Imagen uses a different API (generateImages) and is deprecated June 2026
 const EXCLUDED_PREFIXES = ["imagen"];
 
+// Models that support Google Search grounding via tools: [{ googleSearch: {} }]
+// Update this list when Google adds grounding support to additional models.
+const GROUNDING_SUPPORTED_MODELS = ["gemini-3.1-flash-image-preview"];
+
 let cachedAvailableModels: string[] | null = null;
 
 // --- Multi-turn session management ---
@@ -172,6 +176,14 @@ export async function generateImage(
     throw new Error(
       `Model "${model}" is not available. ` +
         `Image-capable models for your API key: ${available.join(", ")}`,
+    );
+  }
+
+  // Validate useSearchGrounding model compatibility before hitting the API
+  if (params.useSearchGrounding && !GROUNDING_SUPPORTED_MODELS.includes(model)) {
+    throw new Error(
+      `useSearchGrounding is only supported on ${GROUNDING_SUPPORTED_MODELS.join(", ")}. ` +
+        `You requested ${model}.`,
     );
   }
 
