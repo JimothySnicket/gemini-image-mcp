@@ -2,15 +2,19 @@
 import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { StdioServerTransport } from "@modelcontextprotocol/sdk/server/stdio.js";
 import { z } from "zod/v4";
-import { discoverModels, generateImage, getAvailableModels } from "./generate.js";
+import { createRequire } from "module";
+import { discoverModels, generateImage } from "./generate.js";
 import { processImage } from "./process.js";
 import { loadConfig, initConfig } from "./config.js";
 import { log, setLogLevel } from "./utils.js";
 
+const require = createRequire(import.meta.url);
+const pkg = require("../package.json") as { version: string };
+
 const server = new McpServer(
   {
     name: "gemini-image-mcp",
-    version: "0.2.0",
+    version: pkg.version,
   },
   {
     instructions:
