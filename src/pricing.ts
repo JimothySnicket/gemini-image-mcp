@@ -1,3 +1,5 @@
+import { log } from "./utils.js";
+
 interface ModelPricing {
   inputPerMillion: number;
   textOutputPerMillion: number;
@@ -5,7 +7,10 @@ interface ModelPricing {
   thinkingPerMillion: number;
 }
 
-// Last verified: 2026-04-01
+// Single source of truth for when the pricing table was last checked against
+// Google AI Studio. Surfaced in every UsageReport so callers can assess staleness.
+export const PRICING_VERIFIED_DATE = "2026-04-01";
+
 const PRICING: Record<string, ModelPricing> = {
   "gemini-2.5-flash-image": {
     inputPerMillion: 0.3,
@@ -34,6 +39,7 @@ export interface UsageReport {
   thinkingTokens: number;
   totalTokens: number;
   estimatedCost: string;
+  pricingVerifiedDate: string;
 }
 
 interface ModalityTokenCount {
@@ -75,6 +81,11 @@ export function calculateUsage(
       (imageTokens / 1_000_000) * pricing.imageOutputPerMillion +
       (thinking / 1_000_000) * pricing.thinkingPerMillion;
     estimatedCost = `$${cost.toFixed(4)}`;
+  } else {
+    log.error(
+      `No pricing entry for model "${model}". Cost cannot be estimated. ` +
+        "Please report this at https://github.com/JimothySnicket/gemini-image-mcp/issues",
+    );
   }
 
   return {
@@ -84,5 +95,6 @@ export function calculateUsage(
     thinkingTokens: thinking,
     totalTokens: total,
     estimatedCost,
+    pricingVerifiedDate: PRICING_VERIFIED_DATE,
   };
 }
