@@ -363,7 +363,7 @@ export async function generateImage(
 
     throw new Error(
       "No image was returned by the API and no clear reason was given. " +
-        "Check ~/gemini-images/gemini-mcp.log with LOG_LEVEL=debug for details.",
+        "Check gemini-mcp.log under your outputDir (default ~/gemini-images) with LOG_LEVEL=debug for details.",
     );
   }
 

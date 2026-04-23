@@ -6,7 +6,8 @@ import { createRequire } from "module";
 import { discoverModels, generateImage } from "./generate.js";
 import { processImage } from "./process.js";
 import { loadConfig, initConfig } from "./config.js";
-import { log, setLogLevel } from "./utils.js";
+import { initTracker } from "./tracker.js";
+import { log, setLogLevel, setLogDir } from "./utils.js";
 
 const require = createRequire(import.meta.url);
 const pkg = require("../package.json") as { version: string };
@@ -268,9 +269,10 @@ async function main() {
     process.exit(0);
   }
 
-  // Load config and update log level
+  // Load config and update log level and log directory
   const config = loadConfig();
   setLogLevel(config.logLevel);
+  setLogDir(config.outputDir);
 
   log.info("Gemini Image MCP server starting");
   log.info(`  Node: ${process.version}`);
@@ -294,6 +296,10 @@ async function main() {
   } else {
     log.info("  Rate limits: none configured. Set maxRequestsPerHour / maxCostPerHour in config or env.");
   }
+
+  // Seed the rolling rate-limit window from the manifest once. Subsequent
+  // reads are O(1) off the in-memory window.
+  initTracker();
 
   // Discover available image models (also validates the API key)
   try {
