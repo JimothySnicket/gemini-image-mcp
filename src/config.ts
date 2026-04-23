@@ -390,3 +390,11 @@ export function initConfig(opts: InitConfigOpts): void {
   writeFileSync(targetPath, CONFIG_TEMPLATE, "utf-8");
   log.info(`[config] Config file written to ${targetPath}`);
 }
+
+// ── Test-only helpers ───────────────────────────────────────────────
+
+/** Reset the cached config. Test-only — forces the next loadConfig() call to re-read
+ *  env vars and config files. Required when tests change process.env after module load. */
+export function __resetConfigCache(): void {
+  cachedConfig = null;
+}

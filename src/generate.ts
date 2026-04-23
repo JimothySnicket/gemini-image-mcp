@@ -52,7 +52,21 @@ const EXCLUDED_PREFIXES = ["imagen"];
 
 // Models that support Google Search grounding via tools: [{ googleSearch: {} }]
 // Update this list when Google adds grounding support to additional models.
-const GROUNDING_SUPPORTED_MODELS = ["gemini-3.1-flash-image-preview"];
+export const GROUNDING_SUPPORTED_MODELS = ["gemini-3.1-flash-image-preview"];
+
+/**
+ * Validate that the requested model supports useSearchGrounding.
+ * Throws with the documented error message if not.
+ * Exported for unit testing — behaviour is identical to the inline check it replaces.
+ */
+export function validateGrounding(model: string, useSearchGrounding: boolean | undefined): void {
+  if (useSearchGrounding && !GROUNDING_SUPPORTED_MODELS.includes(model)) {
+    throw new Error(
+      `useSearchGrounding is only supported on ${GROUNDING_SUPPORTED_MODELS.join(", ")}. ` +
+        `You requested ${model}.`,
+    );
+  }
+}
 
 let cachedAvailableModels: string[] | null = null;
 
@@ -180,12 +194,7 @@ export async function generateImage(
   }
 
   // Validate useSearchGrounding model compatibility before hitting the API
-  if (params.useSearchGrounding && !GROUNDING_SUPPORTED_MODELS.includes(model)) {
-    throw new Error(
-      `useSearchGrounding is only supported on ${GROUNDING_SUPPORTED_MODELS.join(", ")}. ` +
-        `You requested ${model}.`,
-    );
-  }
+  validateGrounding(model, params.useSearchGrounding);
 
   log.info(`Generating image with model=${model}`);
   log.debug("Params:", JSON.stringify(params, null, 2));
