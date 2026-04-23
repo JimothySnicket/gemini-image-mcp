@@ -2,7 +2,7 @@
 
 All notable changes to this project.
 
-## [0.4.0] - Unreleased
+## [0.4.0] - 2026-04-23
 
 ### Fixed
 - Server version string in MCP handshake now reads from package.json at runtime — single source of truth, no more stale 0.2.0 broadcast

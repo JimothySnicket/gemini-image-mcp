@@ -1,6 +1,6 @@
 {
   "name": "@jimothy-snicket/gemini-image-mcp",
-  "version": "0.3.1",
+  "version": "0.4.0",
   "mcpName": "io.github.JimothySnicket/gemini-image",
   "description": "MCP server for Google Gemini image generation and editing",
   "type": "module",
