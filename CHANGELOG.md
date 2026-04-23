@@ -2,6 +2,34 @@
 
 All notable changes to this project.
 
+## [0.4.0] - Unreleased
+
+### Fixed
+- Server version string in MCP handshake now reads from package.json at runtime — single source of truth, no more stale 0.2.0 broadcast
+- Removed dead `getAvailableModels` import from `index.ts` (function is internal to `generate.ts`)
+- Log directory now follows the configured `outputDir` instead of hardcoding `~/gemini-images`
+- `useSearchGrounding` now fails fast on unsupported models with a clear error naming the supported model
+- Misleading "sanitize" comment in error wrapping removed — code now matches what it actually does
+- Rolling rate-limit counter moved in-memory (seeded from disk at startup); no longer re-reads `generations.jsonl` on every request
+
+### Added
+- `pricingVerifiedDate` field in cost responses — surfaces how current the pricing data is; flags unknown models as unreliable
+
+### Changed
+- Triage Dependabot PRs: zod v4, `@types/node` 25, TypeScript 6 each assessed for merge or close
+
+### Internal
+- Regression tests covering: version-string parity, rolling counter O(1) behaviour, grounding model validation, pricing missing-model fallback, log-directory resolution
+
+## [0.3.1] - 2026-04-02
+
+### Added
+- MCP server `instructions` field — clients now discover config file documentation on connect
+- Per-model resolution limits documented in tool description (gemini-2.5-flash is 1K only, deprecates Oct 2026)
+
+### Fixed
+- Trailing comma bug in JSONC comment stripping (prevented parse when commented-out lines preceded closing braces)
+
 ## [0.3.0] - 2026-04-02
 
 ### Added
