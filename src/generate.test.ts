@@ -1,5 +1,5 @@
 import { describe, test, expect } from "bun:test";
-import { isUsableImageModel } from "./generate.js";
+import { isUsableImageModel, buildGenerateConfig } from "./generate.js";
 
 // Tests for the model-discovery filter. isUsableImageModel is a pure function over
 // the shape the live API returns ({ name, supportedActions }), so no API calls are
@@ -79,5 +79,38 @@ describe("isUsableImageModel", () => {
   test("excludes a model with no usable name", () => {
     expect(isUsableImageModel({})).toBe(false);
     expect(isUsableImageModel({ name: "" })).toBe(false);
+  });
+});
+
+describe("buildGenerateConfig", () => {
+  test("single-shot text-to-image uses IMAGE-only modality, no tools/imageConfig", () => {
+    const c = buildGenerateConfig({}, { needsTextMode: false });
+    expect(c.responseModalities).toEqual(["IMAGE"]);
+    expect(c.tools).toBeUndefined();
+    expect(c.imageConfig).toBeUndefined();
+  });
+
+  test("editing/session uses TEXT+IMAGE modality", () => {
+    const c = buildGenerateConfig({}, { needsTextMode: true });
+    expect(c.responseModalities).toEqual(["TEXT", "IMAGE"]);
+  });
+
+  test("useSearchGrounding attaches the googleSearch tool", () => {
+    const c = buildGenerateConfig({ useSearchGrounding: true }, { needsTextMode: false });
+    expect(c.tools).toEqual([{ googleSearch: {} }]);
+  });
+
+  test("no grounding => no tools key", () => {
+    expect(buildGenerateConfig({ useSearchGrounding: false }, { needsTextMode: false }).tools).toBeUndefined();
+    expect(buildGenerateConfig({}, { needsTextMode: false }).tools).toBeUndefined();
+  });
+
+  test("aspectRatio and resolution map into imageConfig (resolution -> imageSize)", () => {
+    const c = buildGenerateConfig({ aspectRatio: "4:5", resolution: "512" }, { needsTextMode: false });
+    expect(c.imageConfig).toEqual({ aspectRatio: "4:5", imageSize: "512" });
+  });
+
+  test("seed passes through", () => {
+    expect(buildGenerateConfig({ seed: 42 }, { needsTextMode: false }).seed).toBe(42);
   });
 });

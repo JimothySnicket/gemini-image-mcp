@@ -359,6 +359,20 @@ describe("loadConfig", () => {
     });
   });
 
+  test("local pricingOverrides override global per-model; global-only entries survive", () => {
+    const rate = (n: number) => ({
+      inputPerMillion: n,
+      textOutputPerMillion: n,
+      imageOutputPerMillion: n,
+      thinkingPerMillion: n,
+    });
+    writeFileSync(globalPath, JSON.stringify({ pricingOverrides: { m: rate(1), gonly: rate(9) } }));
+    writeFileSync(localPath, JSON.stringify({ pricingOverrides: { m: rate(2) } }));
+    const config = loadConfig({ globalPath, localPath });
+    expect(config.pricingOverrides.m.inputPerMillion).toBe(2); // local wins
+    expect(config.pricingOverrides.gonly.inputPerMillion).toBe(9); // global-only survives
+  });
+
   test("config object is frozen", () => {
     const config = loadConfig({ globalPath, localPath });
     expect(Object.isFrozen(config)).toBe(true);
@@ -453,5 +467,16 @@ describe("initConfig", () => {
     expect(config.logLevel).toBe(DEFAULTS.logLevel);
     expect(config.requestTimeout).toBe(DEFAULTS.requestTimeout);
     expect(config.maxRequestsPerHour).toBe(DEFAULTS.maxRequestsPerHour);
+  });
+
+  test("template ships an active pricingOverrides key that round-trips to {}", () => {
+    // Guards against the leading-comma-trap regression: pricingOverrides must be a
+    // real key in the generated config, parseable as-is, not a comment fragment.
+    initConfig({ targetPath });
+    const config = loadConfig({
+      globalPath: targetPath,
+      localPath: join(tmpDir, "nonexistent.jsonc"),
+    });
+    expect(config.pricingOverrides).toEqual({});
   });
 });

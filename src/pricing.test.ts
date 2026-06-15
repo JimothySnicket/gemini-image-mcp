@@ -103,21 +103,58 @@ describe("calculateUsage — missing metadata", () => {
   });
 });
 
-describe("calculateUsage — GA model IDs", () => {
-  test("gemini-3-pro-image (GA) returns a valid cost", () => {
-    const result = calculateUsage("gemini-3-pro-image", makeMetadata());
-    expect(result.estimatedCost).toMatch(/^\$\d+\.\d{4}$/);
+describe("calculateUsage — GA model IDs price at the verified rates", () => {
+  // makeMetadata() = 5 prompt tokens + 1290 image tokens, 0 text/thinking.
+  // Pin exact dollar figures so a wrong rate (e.g. a copy-paste of the flash rate
+  // onto the pro entry) fails the test instead of passing a generic $-shape match.
+  test("gemini-2.5-flash-image: $0.30/M in + $30/M image => $0.0387", () => {
+    expect(calculateUsage("gemini-2.5-flash-image", makeMetadata()).estimatedCost).toBe("$0.0387");
   });
 
-  test("gemini-3.1-flash-image (GA) returns a valid cost", () => {
-    const result = calculateUsage("gemini-3.1-flash-image", makeMetadata());
-    expect(result.estimatedCost).toMatch(/^\$\d+\.\d{4}$/);
+  test("gemini-3-pro-image: $2.00/M in + $120/M image => $0.1548", () => {
+    expect(calculateUsage("gemini-3-pro-image", makeMetadata()).estimatedCost).toBe("$0.1548");
+  });
+
+  test("gemini-3.1-flash-image: $0.50/M in + $60/M image => $0.0774", () => {
+    expect(calculateUsage("gemini-3.1-flash-image", makeMetadata()).estimatedCost).toBe("$0.0774");
   });
 
   test("GA and -preview aliases price identically during the cutover", () => {
-    const ga = calculateUsage("gemini-3.1-flash-image", makeMetadata());
-    const preview = calculateUsage("gemini-3.1-flash-image-preview", makeMetadata());
-    expect(ga.estimatedCost).toBe(preview.estimatedCost);
+    expect(calculateUsage("gemini-3.1-flash-image", makeMetadata()).estimatedCost).toBe(
+      calculateUsage("gemini-3.1-flash-image-preview", makeMetadata()).estimatedCost,
+    );
+    expect(calculateUsage("gemini-3-pro-image", makeMetadata()).estimatedCost).toBe(
+      calculateUsage("gemini-3-pro-image-preview", makeMetadata()).estimatedCost,
+    );
+  });
+});
+
+describe("calculateUsage — malformed pricing overrides never produce $NaN", () => {
+  // A NaN cost serializes to "$NaN", which parses to 0 cents and would silently
+  // defeat the maxCostPerHour cap. Malformed overrides must fall back, not crash.
+  const meta = makeMetadata();
+  const badCases: Record<string, unknown> = {
+    "string rate": { m: { inputPerMillion: "x", textOutputPerMillion: 1, imageOutputPerMillion: 1, thinkingPerMillion: 1 } },
+    "negative rate": { m: { inputPerMillion: -1, textOutputPerMillion: 1, imageOutputPerMillion: 1, thinkingPerMillion: 1 } },
+    "NaN rate": { m: { inputPerMillion: NaN, textOutputPerMillion: 1, imageOutputPerMillion: 1, thinkingPerMillion: 1 } },
+    "missing field": { m: { inputPerMillion: 1 } },
+    "non-object value": { m: "nope" },
+  };
+
+  for (const [label, overrides] of Object.entries(badCases)) {
+    test(`${label}: unknown model falls back to "unknown", never $NaN`, () => {
+      const result = calculateUsage("m", meta, overrides as never);
+      expect(result.estimatedCost).not.toContain("NaN");
+      expect(result.estimatedCost).toMatch(/^unknown/);
+    });
+  }
+
+  test("a malformed override for a KNOWN model falls back to built-in pricing", () => {
+    const good = calculateUsage("gemini-2.5-flash-image", meta);
+    const withBad = calculateUsage("gemini-2.5-flash-image", meta, {
+      "gemini-2.5-flash-image": { inputPerMillion: NaN, textOutputPerMillion: 1, imageOutputPerMillion: 1, thinkingPerMillion: 1 },
+    } as never);
+    expect(withBad.estimatedCost).toBe(good.estimatedCost);
   });
 });
 

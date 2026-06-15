@@ -370,20 +370,20 @@ export const CONFIG_TEMPLATE = `{
       // "format": "png",
       // "quality": 90
     }
-  }
+  },
 
   // Optional: override or supply per-token pricing for cost estimates (USD per 1M tokens).
-  // Use this to add rates for a model the server doesn't know yet, or to correct stale
-  // rates without waiting for a release. Cost reporting falls back to "unknown" only when
-  // a model has no entry here AND none built in.
-  // ,"pricingOverrides": {
-  //   "some-new-image-model": {
-  //     "inputPerMillion": 0.5,
-  //     "textOutputPerMillion": 60,
-  //     "imageOutputPerMillion": 60,
-  //     "thinkingPerMillion": 60
-  //   }
-  // }
+  // Add rates for a model the server doesn't know yet, or correct stale rates without
+  // waiting for a release. Uncomment an entry below (rates must be finite numbers >= 0).
+  // Cost falls back to "unknown" only when a model has no entry here AND none built in.
+  "pricingOverrides": {
+    // "some-new-image-model": {
+    //   "inputPerMillion": 0.5,
+    //   "textOutputPerMillion": 60,
+    //   "imageOutputPerMillion": 60,
+    //   "thinkingPerMillion": 60
+    // }
+  }
 }
 `;
 

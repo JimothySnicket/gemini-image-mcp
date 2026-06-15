@@ -52,6 +52,38 @@ export const PRICING: Record<string, ModelPricing> = {
   },
 };
 
+function isValidPricing(p: ModelPricing | undefined): p is ModelPricing {
+  return (
+    !!p &&
+    typeof p === "object" &&
+    [p.inputPerMillion, p.textOutputPerMillion, p.imageOutputPerMillion, p.thinkingPerMillion].every(
+      (n) => typeof n === "number" && Number.isFinite(n) && n >= 0,
+    )
+  );
+}
+
+/**
+ * Resolve pricing for a model: a caller override wins, but a malformed override
+ * (non-numeric / negative / missing rate) is ignored with a warning and we fall
+ * back to the built-in table. A malformed rate would compute a NaN cost that
+ * serializes to "$NaN" and parses to 0 cents — silently defeating the
+ * maxCostPerHour cap — so we never let one through.
+ */
+function resolvePricing(
+  model: string,
+  overrides?: Record<string, ModelPricing>,
+): ModelPricing | undefined {
+  const override = overrides?.[model];
+  if (override !== undefined && !isValidPricing(override)) {
+    log.error(
+      `Ignoring invalid pricingOverrides entry for "${model}" — each rate must be a finite number >= 0. ` +
+        "Falling back to built-in pricing.",
+    );
+  }
+  if (isValidPricing(override)) return override;
+  return PRICING[model];
+}
+
 export interface UsageReport {
   promptTokens: number;
   outputTokens: number;
@@ -92,7 +124,7 @@ export function calculateUsage(
     if (detail.modality === "TEXT") textTokens += detail.tokenCount ?? 0;
   }
 
-  const pricing = overrides?.[model] ?? PRICING[model];
+  const pricing = resolvePricing(model, overrides);
   let estimatedCost = "unknown (model not in pricing table)";
 
   if (pricing) {

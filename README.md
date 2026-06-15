@@ -232,8 +232,8 @@ Models with no entry (built-in or override) still generate — their cost is rep
 | `prompt` | Yes | Text description or editing instruction |
 | `images` | No | Array of file paths to input/reference images |
 | `model` | No | Gemini model ID |
-| `aspectRatio` | No | `1:1`, `2:3`, `3:2`, `3:4`, `4:3`, `4:5`, `5:4`, `9:16`, `16:9`, `21:9`, plus `1:4`, `4:1`, `1:8`, `8:1` (gemini-3.1-flash). Validated by the API. |
-| `resolution` | No | `512` (gemini-3.1-flash only), `1K`, `2K`, `4K` |
+| `aspectRatio` | No | `1:1`, `2:3`, `3:2`, `3:4`, `4:3`, `4:5`, `5:4`, `9:16`, `16:9`, `21:9`, plus `1:4`, `4:1`, `1:8`, `8:1` (gemini-3.1-flash-image). Validated by the API. |
+| `resolution` | No | `512` (gemini-3.1-flash-image only), `1K`, `2K`, `4K` |
 | `outputDir` | No | Override output directory for this request |
 | `filename` | No | Base name for saved file (e.g. `hero-banner`). Auto-versioned if duplicate. |
 | `subfolder` | No | Subfolder within output directory (e.g. `landing-page`) |
@@ -257,7 +257,7 @@ Models with no entry (built-in or override) still generate — their cost is rep
     "thinkingTokens": 412,
     "totalTokens": 1712,
     "estimatedCost": "$0.0390",
-    "pricingVerifiedDate": "2026-04-01"
+    "pricingVerifiedDate": "2026-06-15"
   },
   "session": {
     "generationsThisSession": 3,

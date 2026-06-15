@@ -73,6 +73,32 @@ export function isUsableImageModel(model: DiscoverableModel): boolean {
   return actions.length === 0 || actions.includes("generateContent");
 }
 
+/**
+ * Assemble the `config` object for ai.models.generateContent from request params.
+ * Pure and exported for unit testing — no live-client dependency.
+ * - responseModalities: IMAGE-only for single-shot text-to-image (prevents text-only
+ *   responses); TEXT+IMAGE when editing with input images or continuing a session
+ *   (the model must read the instruction and preserve thoughtSignature history).
+ * - aspectRatio/resolution map into imageConfig (omitted entirely when empty).
+ * - useSearchGrounding attaches the googleSearch tool; the API decides support.
+ */
+export function buildGenerateConfig(
+  params: Pick<GenerateImageParams, "aspectRatio" | "resolution" | "seed" | "useSearchGrounding">,
+  opts: { needsTextMode: boolean },
+): Record<string, unknown> {
+  const imageConfig: Record<string, string> = {};
+  if (params.aspectRatio) imageConfig.aspectRatio = params.aspectRatio;
+  if (params.resolution) imageConfig.imageSize = params.resolution;
+
+  const generateConfig: Record<string, unknown> = {
+    responseModalities: opts.needsTextMode ? ["TEXT", "IMAGE"] : ["IMAGE"],
+  };
+  if (Object.keys(imageConfig).length > 0) generateConfig.imageConfig = imageConfig;
+  if (params.seed !== undefined) generateConfig.seed = params.seed;
+  if (params.useSearchGrounding) generateConfig.tools = [{ googleSearch: {} }];
+  return generateConfig;
+}
+
 let cachedAvailableModels: string[] | null = null;
 
 // --- Multi-turn session management ---
@@ -248,26 +274,14 @@ export async function generateImage(
     }
   }
 
-  // Build config
-  const imageConfig: Record<string, string> = {};
-  if (params.aspectRatio) imageConfig.aspectRatio = params.aspectRatio;
-  if (params.resolution) imageConfig.imageSize = params.resolution;
-
-  // Use IMAGE-only for single-shot text-to-image (prevents text-only responses).
-  // Use TEXT+IMAGE when editing with input images (model needs to read the instruction)
-  // and for sessions (needed to preserve thoughtSignature in history).
+  // Build config (extracted to buildGenerateConfig so the modality / imageConfig /
+  // grounding wiring is unit-testable without the live client). abortSignal is
+  // attached just before the call below.
   const isSession = !!(sessionId && sessions.has(sessionId));
   const hasInputImages = !!(params.images?.length);
-  const needsTextMode = isSession || hasInputImages;
-  const generateConfig: Record<string, unknown> = {
-    responseModalities: needsTextMode ? ["TEXT", "IMAGE"] : ["IMAGE"],
-    abortSignal: undefined as unknown,
-  };
-  if (Object.keys(imageConfig).length > 0) generateConfig.imageConfig = imageConfig;
-  if (params.seed !== undefined) generateConfig.seed = params.seed;
-  if (params.useSearchGrounding) {
-    generateConfig.tools = [{ googleSearch: {} }];
-  }
+  const generateConfig = buildGenerateConfig(params, {
+    needsTextMode: isSession || hasInputImages,
+  });
 
   const startTime = Date.now();
 
