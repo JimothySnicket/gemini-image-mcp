@@ -45,27 +45,32 @@ export interface GenerateImageResult {
   session: SessionStats;
 }
 
-// Known image-capable model name fragments (Gemini native only)
+// Bare-name fragments that mark a model as image-capable. The API exposes no
+// "image output" capability flag, so we match on the model name.
 const IMAGE_MODEL_PATTERNS = ["image", "img"];
-// Imagen uses a different API (generateImages) and is deprecated June 2026
-const EXCLUDED_PREFIXES = ["imagen"];
 
-// Models that support Google Search grounding via tools: [{ googleSearch: {} }]
-// Update this list when Google adds grounding support to additional models.
-export const GROUNDING_SUPPORTED_MODELS = ["gemini-3.1-flash-image-preview"];
+export interface DiscoverableModel {
+  name?: string;
+  supportedActions?: string[];
+  supportedGenerationMethods?: string[];
+}
 
 /**
- * Validate that the requested model supports useSearchGrounding.
- * Throws with the documented error message if not.
- * Exported for unit testing — behaviour is identical to the inline check it replaces.
+ * Decide whether a discovered model is usable by this server: its name must look
+ * image-capable AND it must support the `generateContent` action we call. This
+ * defers "what counts as a usable image model" to the live API instead of a
+ * hardcoded allowlist — Imagen models (which expose only `predict`) drop out
+ * naturally, with no model-name special-casing. If the API reports no actions
+ * for a model we include it (safe direction: list it and let per-request
+ * validation or the API reject, rather than hiding a model on missing metadata).
+ * Exported for unit testing.
  */
-export function validateGrounding(model: string, useSearchGrounding: boolean | undefined): void {
-  if (useSearchGrounding && !GROUNDING_SUPPORTED_MODELS.includes(model)) {
-    throw new Error(
-      `useSearchGrounding is only supported on ${GROUNDING_SUPPORTED_MODELS.join(", ")}. ` +
-        `You requested ${model}.`,
-    );
-  }
+export function isUsableImageModel(model: DiscoverableModel): boolean {
+  const name = (model.name ?? "").replace("models/", "");
+  const looksImage = IMAGE_MODEL_PATTERNS.some((p) => name.includes(p));
+  if (!looksImage) return false;
+  const actions = model.supportedActions ?? model.supportedGenerationMethods ?? [];
+  return actions.length === 0 || actions.includes("generateContent");
 }
 
 let cachedAvailableModels: string[] | null = null;
@@ -118,11 +123,8 @@ export async function discoverModels(): Promise<string[]> {
   try {
     const pager = await ai.models.list({ config: { pageSize: 100 } });
     for await (const model of pager) {
-      const name = model.name?.replace("models/", "") ?? "";
-      const isImageCapable = IMAGE_MODEL_PATTERNS.some((p) => name.includes(p));
-      const isExcluded = EXCLUDED_PREFIXES.some((p) => name.startsWith(p));
-      if (isImageCapable && !isExcluded) {
-        imageModels.push(name);
+      if (isUsableImageModel(model)) {
+        imageModels.push((model.name ?? "").replace("models/", ""));
       }
     }
   } catch (err) {
@@ -192,9 +194,6 @@ export async function generateImage(
         `Image-capable models for your API key: ${available.join(", ")}`,
     );
   }
-
-  // Validate useSearchGrounding model compatibility before hitting the API
-  validateGrounding(model, params.useSearchGrounding);
 
   log.info(`Generating image with model=${model}`);
   log.debug("Params:", JSON.stringify(params, null, 2));
@@ -386,8 +385,8 @@ export async function generateImage(
     subfolder: params.subfolder,
   });
 
-  // Calculate usage
-  const usage = calculateUsage(model, response.usageMetadata);
+  // Calculate usage (config pricing overrides take precedence over the built-in table)
+  const usage = calculateUsage(model, response.usageMetadata, config.pricingOverrides);
   log.info(
     `Complete: ${imagePath} | ${usage.totalTokens} tokens | ${usage.estimatedCost} | ${elapsed}ms`,
   );

@@ -25,3 +25,26 @@ describe("version-string parity", () => {
     expect(pkg.version).toMatch(/^\d+\.\d+\.\d+/);
   });
 });
+
+// server.json (MCP Registry) and plugin.json (Claude Code plugin) carry their own
+// version strings that have silently drifted from package.json in past releases.
+// Lock them together so a release can't ship a stale manifest.
+describe("manifest version parity", () => {
+  const pkg = require("../package.json") as { version: string };
+
+  test("server.json version matches package.json (top-level + every package entry)", () => {
+    const server = require("../server.json") as {
+      version: string;
+      packages: { version: string }[];
+    };
+    expect(server.version).toBe(pkg.version);
+    for (const p of server.packages) {
+      expect(p.version).toBe(pkg.version);
+    }
+  });
+
+  test("plugin.json version matches package.json", () => {
+    const plugin = require("../plugin.json") as { version: string };
+    expect(plugin.version).toBe(pkg.version);
+  });
+});

@@ -2,6 +2,26 @@
 
 All notable changes to this project.
 
+## [0.4.1] - 2026-06-15
+
+### Fixed
+- `useSearchGrounding` is no longer pre-rejected against a hardcoded allowlist — the server defers to the API, fixing false rejections on the GA models `gemini-3.1-flash-image` and `gemini-3-pro-image` (the allowlist still named only the `-preview` ID)
+- Corrected the Imagen shutdown date in docs to August 17, 2026 (was "June 2026") and refreshed model references to the GA IDs; the `-preview` IDs retire 2026-06-25
+- `gemini-3-pro-image` reference-image guidance corrected to ~11 (was "14")
+
+### Added
+- Pricing entries for the GA model IDs `gemini-3-pro-image` and `gemini-3.1-flash-image` (rates re-verified 2026-06-15 against the official pricing page); `-preview` aliases retained through the cutover
+- `pricingOverrides` config key — supply or override per-token rates for models the built-in table doesn't know yet, no release required
+- `512` resolution option (gemini-3.1-flash-image)
+- `npm run check:pricing` maintenance script — surfaces the live pricing page next to the built-in table for a human re-verify
+- Tests for the capability-based discovery filter, GA-model pricing, pricing overrides, and server.json/plugin.json version parity (79 tests, up from 67)
+
+### Changed
+- Model discovery filters by the `generateContent` capability instead of an "imagen" name exclusion — more robust to new models and naming changes
+- `aspectRatio` is now a free string validated by the API (supports the full current set including 4:5, 5:4, and the ultrawide ratios) instead of a fixed enum
+- Tool descriptions and the config template no longer enumerate stale `-preview` model IDs; they point at live discovery
+- `plugin.json` version aligned to the package version (was stale at 0.2.0)
+
 ## [0.4.0] - 2026-04-23
 
 ### Fixed

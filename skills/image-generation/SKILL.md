@@ -144,9 +144,11 @@ Structure prompts as: **[Style] [Subject] [Composition] [Context/Atmosphere]**
 
 ## Models
 
-- `gemini-2.5-flash-image` (default) — fast (~6s), cheap (~$0.04/image)
-- `gemini-3-pro-image-preview` — best quality, text rendering, up to 14 reference images, 4K. Slower (~16s), pricier (~$0.15/image)
-- `gemini-3.1-flash-image-preview` — speed + quality balance. Supports Google Search grounding.
+- `gemini-2.5-flash-image` (default) — cheapest (~$0.04/image), 1K. Shuts down 2026-10-02.
+- `gemini-3.1-flash-image` — speed + quality, Google Search grounding, 512–4K (~$0.07/1K image).
+- `gemini-3-pro-image` — best quality, text rendering, up to 4K, ~11 reference images (~$0.13/1K image).
+
+Use the GA IDs above. The older `-preview` IDs still work during Google's cutover but retire 2026-06-25. The server validates the model against whatever your API key supports.
 
 ## Important
 

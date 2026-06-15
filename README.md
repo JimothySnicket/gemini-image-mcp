@@ -2,7 +2,7 @@
 
 MCP server for Google Gemini image generation, editing, and processing. Two tools, no bloat.
 
-Built on Gemini's native image generation API (`generateContent`), not the deprecated Imagen API. If you're migrating from Imagen (shutting down June 2026), this is what you move to — multi-turn editing, reference images, and all the features Imagen didn't have.
+Built on Gemini's native image generation API (`generateContent`), not the deprecated Imagen API. If you're migrating from Imagen (shutting down August 17, 2026 — Google's recommended replacement is `gemini-3.1-flash-image`), this is what you move to — multi-turn editing, reference images, and all the features Imagen didn't have.
 
 ## Install
 
@@ -42,12 +42,12 @@ npx @jimothy-snicket/gemini-image-mcp --init --local
 - **Text-to-image** — describe what you want, get an image
 - **Image editing** — provide reference images and an editing instruction
 - **Multi-turn sessions** — iteratively refine images with conversation history
-- **Multi-image input** — up to 14 reference images on gemini-3-pro
+- **Multi-image input** — up to ~14 reference images on gemini-3.1-flash-image (~11 on gemini-3-pro-image)
 - **Cost reporting** — every response includes token counts, estimated USD cost, and session totals
 - **Rate limiting** — configurable per-hour caps on requests and cost to prevent runaway agents
 - **Auto model discovery** — detects available image models from your API key at startup
 - **Seed** — reproducible generation with integer seeds
-- **Google Search grounding** — real-world accuracy on gemini-3.1-flash
+- **Google Search grounding** — real-world accuracy on the gemini-3.x image models
 
 ### process_image — Local (free, no API calls)
 - **Crop** — pixel-exact, aspect ratio (center), or focal point (attention/entropy)
@@ -190,7 +190,7 @@ You can also set per-tool defaults so every request uses your preferred settings
 
 ```json
 {
-  "defaultModel": "gemini-3.1-flash-image-preview",
+  "defaultModel": "gemini-3.1-flash-image",
   "defaults": {
     "generate": {
       "aspectRatio": "16:9",
@@ -206,6 +206,23 @@ You can also set per-tool defaults so every request uses your preferred settings
 
 Per-request parameters always override config defaults.
 
+**Custom pricing.** Cost estimates come from a built-in per-token rate table (there's no pricing API to fetch live). If you use a model the table doesn't know yet — or Google changes a rate before this package updates — add `pricingOverrides` so cost reporting stays accurate without waiting for a release:
+
+```json
+{
+  "pricingOverrides": {
+    "some-new-image-model": {
+      "inputPerMillion": 0.5,
+      "textOutputPerMillion": 60,
+      "imageOutputPerMillion": 60,
+      "thinkingPerMillion": 60
+    }
+  }
+}
+```
+
+Models with no entry (built-in or override) still generate — their cost is reported as `unknown` rather than guessed.
+
 ## Tool: `generate_image`
 
 ### Parameters
@@ -215,14 +232,14 @@ Per-request parameters always override config defaults.
 | `prompt` | Yes | Text description or editing instruction |
 | `images` | No | Array of file paths to input/reference images |
 | `model` | No | Gemini model ID |
-| `aspectRatio` | No | `1:1`, `16:9`, `9:16`, `3:2`, `2:3`, `4:3`, `3:4`, `21:9` |
-| `resolution` | No | `1K`, `2K`, `4K` |
+| `aspectRatio` | No | `1:1`, `2:3`, `3:2`, `3:4`, `4:3`, `4:5`, `5:4`, `9:16`, `16:9`, `21:9`, plus `1:4`, `4:1`, `1:8`, `8:1` (gemini-3.1-flash). Validated by the API. |
+| `resolution` | No | `512` (gemini-3.1-flash only), `1K`, `2K`, `4K` |
 | `outputDir` | No | Override output directory for this request |
 | `filename` | No | Base name for saved file (e.g. `hero-banner`). Auto-versioned if duplicate. |
 | `subfolder` | No | Subfolder within output directory (e.g. `landing-page`) |
 | `sessionId` | No | Continue a multi-turn editing session from a previous response |
 | `seed` | No | Integer seed for reproducible generation |
-| `useSearchGrounding` | No | Enable Google Search grounding (gemini-3.1-flash) |
+| `useSearchGrounding` | No | Enable Google Search grounding (gemini-3.x image models) |
 
 ### Example Response
 
@@ -239,7 +256,8 @@ Per-request parameters always override config defaults.
     "imageTokens": 1290,
     "thinkingTokens": 412,
     "totalTokens": 1712,
-    "estimatedCost": "$0.0390"
+    "estimatedCost": "$0.0390",
+    "pricingVerifiedDate": "2026-04-01"
   },
   "session": {
     "generationsThisSession": 3,
@@ -269,7 +287,7 @@ Per-request parameters always override config defaults.
 > "Generate a hero banner" with `filename: "hero"`, `subfolder: "landing-page"` → saves to `~/gemini-images/landing-page/hero.png`
 
 **High quality:**
-> "A photorealistic product shot of headphones on marble, 4K" (using gemini-3-pro-image-preview)
+> "A photorealistic product shot of headphones on marble, 4K" (using gemini-3-pro-image)
 
 ## Tool: `process_image`
 
@@ -357,9 +375,11 @@ process_image → format: "webp" + quality: 85
 
 | Model | Strengths | Resolution | Notes |
 |-------|-----------|------------|-------|
-| `gemini-2.5-flash-image` | Fast, cheap (~$0.04/image) | 1K only | Default. Deprecates Oct 2026 |
-| `gemini-3-pro-image-preview` | Best quality, text rendering | 1K, 2K, 4K | Up to 14 reference images |
-| `gemini-3.1-flash-image-preview` | Speed + quality balance | 512, 1K, 2K, 4K | Google Search grounding |
+| `gemini-2.5-flash-image` | Cheapest (~$0.04/image) | 1K | Default. Shuts down 2026-10-02 |
+| `gemini-3.1-flash-image` | Speed + quality, Google Search grounding | 512, 1K, 2K, 4K | ~$0.07/1K image. ~14 reference images |
+| `gemini-3-pro-image` | Best quality, text rendering | 1K, 2K, 4K | ~$0.13/1K image. ~11 reference images |
+
+The `-preview` IDs (`gemini-3-pro-image-preview`, `gemini-3.1-flash-image-preview`) are still accepted during Google's cutover but **retire 2026-06-25** — use the GA IDs above. The server discovers whichever image models your API key supports at startup and validates each request against that live list, so new models work without an update.
 
 ## Development
 

@@ -36,7 +36,7 @@ server.registerTool(
     description:
       "Generate or edit images using Google Gemini. " +
       "Provide just a prompt for text-to-image generation. " +
-      "Add image file paths to edit or use reference images (up to 14 on gemini-3-pro). " +
+      "Add image file paths to edit or use reference images. " +
       "Returns the saved file path, model used, token counts, and estimated cost.",
     inputSchema: {
       prompt: z
@@ -47,22 +47,27 @@ server.registerTool(
       images: z
         .optional(z.array(z.string()).max(14))
         .describe(
-          "File paths to input/reference images for editing (max 14). Omit for text-to-image generation",
+          "File paths to input/reference images for editing. Omit for text-to-image generation. " +
+            "Max references vary by model (gemini-3.1-flash-image ~14, gemini-3-pro-image ~11).",
         ),
       model: z
         .optional(z.string())
         .describe(
-          "Gemini model ID. Defaults to gemini-2.5-flash-image. " +
-            "Options: gemini-2.5-flash-image, gemini-3-pro-image-preview, gemini-3.1-flash-image-preview",
+          "Gemini image model ID. Defaults to the configured default (gemini-2.5-flash-image). " +
+            "Validated at request time against the models your API key supports (discovered at startup). " +
+            "Common: gemini-3.1-flash-image (fast, grounding, 512-4K), gemini-3-pro-image (best quality, up to 4K), " +
+            "gemini-2.5-flash-image (cheapest, 1K; shuts down 2026-10-02).",
         ),
       aspectRatio: z
-        .optional(
-          z.enum(["1:1", "16:9", "9:16", "3:2", "2:3", "4:3", "3:4", "21:9"]),
-        )
-        .describe("Image aspect ratio. Defaults to config value or 1:1"),
+        .optional(z.string())
+        .describe(
+          "Image aspect ratio (defers to the API — unsupported values are rejected by Gemini). " +
+            "Defaults to config value or 1:1. Current models support: 1:1, 2:3, 3:2, 3:4, 4:3, 4:5, 5:4, " +
+            "9:16, 16:9, 21:9, plus 1:4, 4:1, 1:8, 8:1 on gemini-3.1-flash-image.",
+        ),
       resolution: z
-        .optional(z.enum(["1K", "2K", "4K"]))
-        .describe("Image resolution. Defaults to config value or 1K. 2K/4K only on gemini-3-pro and gemini-3.1-flash. gemini-2.5-flash is 1K only."),
+        .optional(z.enum(["512", "1K", "2K", "4K"]))
+        .describe("Image resolution. Defaults to config value or 1K. 512 only on gemini-3.1-flash-image; 1K/2K/4K on gemini-3.x image models; gemini-2.5-flash-image is 1K."),
       outputDir: z
         .optional(z.string())
         .describe(
@@ -91,8 +96,8 @@ server.registerTool(
       useSearchGrounding: z
         .optional(z.boolean())
         .describe(
-          "Enable Google Search grounding for real-world accuracy. " +
-            "Available on gemini-3.1-flash-image-preview.",
+          "Enable Google Search grounding for real-world accuracy. Supported on the gemini-3.x " +
+            "image models; the API rejects it on models that don't support it.",
         ),
     },
   },

@@ -1,28 +1,48 @@
 import { log } from "./utils.js";
 
-interface ModelPricing {
+export interface ModelPricing {
   inputPerMillion: number;
   textOutputPerMillion: number;
   imageOutputPerMillion: number;
   thinkingPerMillion: number;
 }
 
-// Single source of truth for when the pricing table was last checked against
-// Google AI Studio. Surfaced in every UsageReport so callers can assess staleness.
-export const PRICING_VERIFIED_DATE = "2026-04-01";
+// Single source of truth for when the pricing table was last checked against the
+// official Gemini API pricing page. Surfaced in every UsageReport so callers can
+// assess staleness. (There is no pricing API — these rates are maintained by hand;
+// run `npm run check:pricing` to re-verify against the live docs.)
+export const PRICING_VERIFIED_DATE = "2026-06-15";
 
-const PRICING: Record<string, ModelPricing> = {
+// Per-1M-token rates (USD). The estimated cost is computed from the live token
+// counts the API returns, so per-image cost auto-adjusts with resolution; only
+// these rates are static. Unknown models fall back to "unknown" (see below) or a
+// caller-supplied pricingOverrides entry, so a brand-new model still works.
+export const PRICING: Record<string, ModelPricing> = {
   "gemini-2.5-flash-image": {
     inputPerMillion: 0.3,
     textOutputPerMillion: 2.5,
     imageOutputPerMillion: 30.0,
     thinkingPerMillion: 2.5,
   },
+  // GA since ~2026-05-28. The `-preview` aliases below retire 2026-06-25; both are
+  // kept during the cutover so in-flight callers keep getting accurate costs.
+  "gemini-3-pro-image": {
+    inputPerMillion: 2.0,
+    textOutputPerMillion: 120.0,
+    imageOutputPerMillion: 120.0,
+    thinkingPerMillion: 120.0,
+  },
   "gemini-3-pro-image-preview": {
     inputPerMillion: 2.0,
     textOutputPerMillion: 120.0,
     imageOutputPerMillion: 120.0,
     thinkingPerMillion: 120.0,
+  },
+  "gemini-3.1-flash-image": {
+    inputPerMillion: 0.5,
+    textOutputPerMillion: 60.0,
+    imageOutputPerMillion: 60.0,
+    thinkingPerMillion: 60.0,
   },
   "gemini-3.1-flash-image-preview": {
     inputPerMillion: 0.5,
@@ -58,6 +78,7 @@ interface UsageMetadata {
 export function calculateUsage(
   model: string,
   metadata: UsageMetadata | undefined,
+  overrides?: Record<string, ModelPricing>,
 ): UsageReport {
   const prompt = metadata?.promptTokenCount ?? 0;
   const output = metadata?.candidatesTokenCount ?? 0;
@@ -71,7 +92,7 @@ export function calculateUsage(
     if (detail.modality === "TEXT") textTokens += detail.tokenCount ?? 0;
   }
 
-  const pricing = PRICING[model];
+  const pricing = overrides?.[model] ?? PRICING[model];
   let estimatedCost = "unknown (model not in pricing table)";
 
   if (pricing) {

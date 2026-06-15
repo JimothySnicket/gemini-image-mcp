@@ -5,6 +5,7 @@ dist/
 .mcp.json
 .claude/
 test-output/
+scratch/
 bun.lock
 nul
 mcp-publisher.exe

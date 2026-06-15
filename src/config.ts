@@ -2,6 +2,7 @@ import { existsSync, readFileSync, writeFileSync, mkdirSync } from "fs";
 import { homedir } from "os";
 import { join, dirname } from "path";
 import { log } from "./utils.js";
+import type { ModelPricing } from "./pricing.js";
 
 // ── Types ───────────────────────────────────────────────────────────
 
@@ -29,6 +30,12 @@ export interface GeminiImageConfig {
     generate: GenerateDefaults;
     process: ProcessDefaults;
   };
+  /**
+   * Per-model pricing overrides (USD per 1M tokens), keyed by model ID. Takes
+   * precedence over the built-in pricing table. Lets users supply rates for a
+   * model the server doesn't know yet (or correct stale ones) without a release.
+   */
+  pricingOverrides: Record<string, ModelPricing>;
 }
 
 // ── JSONC Comment Stripping ─────────────────────────────────────────
@@ -167,6 +174,7 @@ export const DEFAULTS: GeminiImageConfig = {
     generate: {},
     process: {},
   },
+  pricingOverrides: {},
 };
 
 /** All keys that are valid at the top level of a config file. */
@@ -258,7 +266,11 @@ export function loadConfig(opts?: LoadConfigOpts): GeminiImageConfig {
   const localPath =
     opts?.localPath ?? join(process.cwd(), ".gemini-image-mcp.json");
 
-  let config: Record<string, unknown> = { ...DEFAULTS, defaults: { ...DEFAULTS.defaults } };
+  let config: Record<string, unknown> = {
+    ...DEFAULTS,
+    defaults: { ...DEFAULTS.defaults },
+    pricingOverrides: { ...DEFAULTS.pricingOverrides },
+  };
 
   // Load global config
   const globalRaw = readJsoncFile(globalPath);
@@ -329,9 +341,9 @@ export const CONFIG_TEMPLATE = `{
   "outputDir": "~/gemini-images",
 
   // Default Gemini model for image generation
-  // gemini-2.5-flash-image         — fast, ~$0.04/image, 1K only (deprecates Oct 2026)
-  // gemini-3.1-flash-image-preview  — fast, ~$0.08/image, up to 4K, search grounding
-  // gemini-3-pro-image-preview      — best quality, ~$0.16/image, up to 4K, 14 ref images
+  // gemini-2.5-flash-image    — cheapest (~$0.04/image), 1K, shuts down 2026-10-02
+  // gemini-3.1-flash-image    — fast + Google Search grounding, 512-4K (~$0.07/1K image)
+  // gemini-3-pro-image        — best quality, up to 4K, ~11 ref images (~$0.13/1K image)
   "defaultModel": "gemini-2.5-flash-image",
 
   // Log level: "debug", "info", or "error"
@@ -352,13 +364,26 @@ export const CONFIG_TEMPLATE = `{
     "generate": {
       // "aspectRatio": "1:1",
       // "resolution": "1K"
-      // Resolution options: 1K (all models), 2K/4K (3-pro and 3.1-flash only)
+      // Resolution: 512 (gemini-3.1-flash only), 1K, 2K, 4K (gemini-3.x); gemini-2.5-flash is 1K
     },
     "process": {
       // "format": "png",
       // "quality": 90
     }
   }
+
+  // Optional: override or supply per-token pricing for cost estimates (USD per 1M tokens).
+  // Use this to add rates for a model the server doesn't know yet, or to correct stale
+  // rates without waiting for a release. Cost reporting falls back to "unknown" only when
+  // a model has no entry here AND none built in.
+  // ,"pricingOverrides": {
+  //   "some-new-image-model": {
+  //     "inputPerMillion": 0.5,
+  //     "textOutputPerMillion": 60,
+  //     "imageOutputPerMillion": 60,
+  //     "thinkingPerMillion": 60
+  //   }
+  // }
 }
 `;
 

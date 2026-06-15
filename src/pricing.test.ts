@@ -103,6 +103,62 @@ describe("calculateUsage — missing metadata", () => {
   });
 });
 
+describe("calculateUsage — GA model IDs", () => {
+  test("gemini-3-pro-image (GA) returns a valid cost", () => {
+    const result = calculateUsage("gemini-3-pro-image", makeMetadata());
+    expect(result.estimatedCost).toMatch(/^\$\d+\.\d{4}$/);
+  });
+
+  test("gemini-3.1-flash-image (GA) returns a valid cost", () => {
+    const result = calculateUsage("gemini-3.1-flash-image", makeMetadata());
+    expect(result.estimatedCost).toMatch(/^\$\d+\.\d{4}$/);
+  });
+
+  test("GA and -preview aliases price identically during the cutover", () => {
+    const ga = calculateUsage("gemini-3.1-flash-image", makeMetadata());
+    const preview = calculateUsage("gemini-3.1-flash-image-preview", makeMetadata());
+    expect(ga.estimatedCost).toBe(preview.estimatedCost);
+  });
+});
+
+describe("calculateUsage — pricing overrides", () => {
+  const override = {
+    "brand-new-model": {
+      inputPerMillion: 1,
+      textOutputPerMillion: 100,
+      imageOutputPerMillion: 100,
+      thinkingPerMillion: 100,
+    },
+  };
+
+  test("an override supplies a cost for a model not in the built-in table", () => {
+    const without = calculateUsage("brand-new-model", makeMetadata());
+    expect(without.estimatedCost).toMatch(/^unknown/);
+
+    const withOverride = calculateUsage("brand-new-model", makeMetadata(), override);
+    expect(withOverride.estimatedCost).toMatch(/^\$\d+\.\d{4}$/);
+  });
+
+  test("an override takes precedence over the built-in table", () => {
+    const builtin = calculateUsage("gemini-2.5-flash-image", makeMetadata());
+    const overridden = calculateUsage("gemini-2.5-flash-image", makeMetadata(), {
+      "gemini-2.5-flash-image": {
+        inputPerMillion: 999,
+        textOutputPerMillion: 999,
+        imageOutputPerMillion: 999,
+        thinkingPerMillion: 999,
+      },
+    });
+    expect(overridden.estimatedCost).not.toBe(builtin.estimatedCost);
+  });
+
+  test("an empty/undefined override leaves built-in pricing intact", () => {
+    const a = calculateUsage("gemini-2.5-flash-image", makeMetadata());
+    const b = calculateUsage("gemini-2.5-flash-image", makeMetadata(), {});
+    expect(a.estimatedCost).toBe(b.estimatedCost);
+  });
+});
+
 describe("PRICING_VERIFIED_DATE constant", () => {
   test("is a date-shaped string (YYYY-MM-DD)", () => {
     expect(PRICING_VERIFIED_DATE).toMatch(/^\d{4}-\d{2}-\d{2}$/);
