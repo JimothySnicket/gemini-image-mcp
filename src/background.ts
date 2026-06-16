@@ -277,10 +277,6 @@ function installTransformers(): Promise<void> {
   return installPromise;
 }
 
-/**
- * Load transformers.js, installing it on demand if absent (and auto-install is enabled).
- * Throws if it can't be made available — matteToPng turns that into actionable guidance.
- */
 // import() the module and normalize: a bare-name ESM import exposes named exports (.pipeline);
 // a file-URL import of the vendor CJS entry exposes the API under .default — handle both.
 async function importTransformersModule(spec: string): Promise<Record<string, unknown>> {
@@ -288,7 +284,25 @@ async function importTransformersModule(spec: string): Promise<Record<string, un
   return (mod.pipeline ? mod : (mod.default ?? mod)) as Record<string, unknown>;
 }
 
-async function loadTransformers(): Promise<Record<string, unknown>> {
+/**
+ * Load transformers.js (memoized), installing it on demand if absent (and auto-install is
+ * enabled). Throws if it can't be made available — matteToPng turns that into actionable
+ * guidance. Loaded exactly once per process and reused for BOTH the pipeline and RawImage:
+ * after a repair the successful load can be a cache-busted URL, so re-running the loader would
+ * otherwise hit the still-poisoned original URL and redundantly reinstall on every later call.
+ */
+let transformersModulePromise: Promise<Record<string, unknown>> | null = null;
+function loadTransformers(): Promise<Record<string, unknown>> {
+  if (!transformersModulePromise) {
+    transformersModulePromise = loadTransformersUncached().catch((err) => {
+      transformersModulePromise = null; // allow a later request to retry
+      throw err;
+    });
+  }
+  return transformersModulePromise;
+}
+
+async function loadTransformersUncached(): Promise<Record<string, unknown>> {
   if (!transformersImportSpecifier() && autoInstallEnabled()) {
     await installTransformers();
   }
