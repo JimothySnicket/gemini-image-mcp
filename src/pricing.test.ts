@@ -129,6 +129,34 @@ describe("calculateUsage — GA model IDs price at the verified rates", () => {
   });
 });
 
+describe("calculateUsage — per-modality output rates (text/thinking priced below image)", () => {
+  // 10 prompt, 1000 image-output, 200 text-output, 100 thinking tokens. Exercises the
+  // text/thinking rates the image-only fixtures above never touch — this is the gap that
+  // let a flat (text==image) rate slip in for the 3.x models.
+  const mixed = () => ({
+    promptTokenCount: 10,
+    candidatesTokenCount: 1200,
+    candidatesTokensDetails: [
+      { modality: "IMAGE", tokenCount: 1000 },
+      { modality: "TEXT", tokenCount: 200 },
+    ],
+    thoughtsTokenCount: 100,
+    totalTokenCount: 1310,
+  });
+
+  test("gemini-2.5-flash-image: text/thinking $2.5/M, image $30/M => $0.0308", () => {
+    expect(calculateUsage("gemini-2.5-flash-image", mixed()).estimatedCost).toBe("$0.0308");
+  });
+
+  test("gemini-3-pro-image: text/thinking $12/M, image $120/M => $0.1236", () => {
+    expect(calculateUsage("gemini-3-pro-image", mixed()).estimatedCost).toBe("$0.1236");
+  });
+
+  test("gemini-3.1-flash-image: text/thinking $3/M, image $60/M => $0.0609", () => {
+    expect(calculateUsage("gemini-3.1-flash-image", mixed()).estimatedCost).toBe("$0.0609");
+  });
+});
+
 describe("calculateUsage — malformed pricing overrides never produce $NaN", () => {
   // A NaN cost serializes to "$NaN", which parses to 0 cents and would silently
   // defeat the maxCostPerHour cap. Malformed overrides must fall back, not crash.

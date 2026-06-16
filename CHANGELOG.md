@@ -8,6 +8,7 @@ All notable changes to this project.
 - `useSearchGrounding` is no longer pre-rejected against a hardcoded allowlist — the server defers to the API, fixing false rejections on the GA models `gemini-3.1-flash-image` and `gemini-3-pro-image` (the allowlist still named only the `-preview` ID)
 - Corrected the Imagen shutdown date in docs to August 17, 2026 (was "June 2026") and refreshed model references to the GA IDs; the `-preview` IDs retire 2026-06-25
 - `gemini-3-pro-image` reference-image guidance corrected to ~11 (was "14")
+- Corrected text/thinking output rates for the gemini-3.x image models — they were set equal to the image rate, over-costing text/thinking tokens 10–20× and risking premature `maxCostPerHour` trips. Now $12/M (3-pro) and $3/M (3.1-flash) for text/thinking, image output unchanged at $120/$60
 
 ### Added
 - Pricing entries for the GA model IDs `gemini-3-pro-image` and `gemini-3.1-flash-image` (rates re-verified 2026-06-15 against the official pricing page); `-preview` aliases retained through the cutover
