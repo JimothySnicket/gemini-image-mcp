@@ -281,6 +281,13 @@ function installTransformers(): Promise<void> {
  * Load transformers.js, installing it on demand if absent (and auto-install is enabled).
  * Throws if it can't be made available — matteToPng turns that into actionable guidance.
  */
+// import() the module and normalize: a bare-name ESM import exposes named exports (.pipeline);
+// a file-URL import of the vendor CJS entry exposes the API under .default — handle both.
+async function importTransformersModule(spec: string): Promise<Record<string, unknown>> {
+  const mod = (await import(spec)) as Record<string, unknown> & { default?: Record<string, unknown> };
+  return (mod.pipeline ? mod : (mod.default ?? mod)) as Record<string, unknown>;
+}
+
 async function loadTransformers(): Promise<Record<string, unknown>> {
   if (!transformersImportSpecifier() && autoInstallEnabled()) {
     await installTransformers();
@@ -288,11 +295,30 @@ async function loadTransformers(): Promise<Record<string, unknown>> {
   const spec = transformersImportSpecifier();
   if (!spec) throw new Error(`${TRANSFORMERS_PKG} is not available`);
   // Dynamic import() (never require()) so loading is ESM-safe on all supported Node versions.
-  // We only import once the package is confirmed on disk, so there's no failing earlier import
-  // to poison Node's resolution cache. A bare-name import resolves the ESM build (named exports);
-  // a file-URL import of the vendor CJS entry exposes the API under .default — handle both.
-  const mod = (await import(spec)) as Record<string, unknown> & { default?: Record<string, unknown> };
-  return (mod.pipeline ? mod : (mod.default ?? mod)) as Record<string, unknown>;
+  // We only import once the package is confirmed resolvable on disk, so there's no failing
+  // earlier import to poison Node's resolution cache.
+  try {
+    return await importTransformersModule(spec);
+  } catch (err) {
+    // resolve() only proves the ENTRY file exists; an interrupted vendor install can leave the
+    // entry yet miss transitive deps (onnxruntime-*, sharp), so import() still throws. For our
+    // OWN on-demand vendor install, repair it once and retry — otherwise every later 'auto'
+    // request repeats the identical failure until the user deletes .matte by hand. (A broken
+    // bare-name peer install is the user's own environment — rethrow it.)
+    const isVendorSpec = spec !== TRANSFORMERS_PKG;
+    if (!isVendorSpec || !autoInstallEnabled()) throw err;
+    log.error(
+      `[background] ${TRANSFORMERS_PKG} resolved but failed to import (${err instanceof Error ? err.message : String(err)}); ` +
+        "repairing the vendor install once and retrying.",
+    );
+    installPromise = null; // drop the resolved single-flight left by the partial install
+    await installTransformers();
+    const repaired = transformersImportSpecifier();
+    if (!repaired) throw err;
+    // Cache-bust the file URL: the failed first import() can cache a link error against it; a
+    // fresh query forces Node to re-resolve the now-complete module graph.
+    return await importTransformersModule(`${repaired}?reinstalled=1`);
+  }
 }
 
 // Cached pipeline promise. transformers.js + the model are only loaded the first time
