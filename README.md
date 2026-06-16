@@ -1,8 +1,8 @@
 # gemini-image-mcp
 
-MCP server for Google Gemini image generation, editing, and processing. Two tools, no bloat.
+A simple, focused MCP server for Google Gemini's native image generation — the "Nano Banana" models. Generate, edit, and locally process images from Claude Code, Claude Desktop, or any stdio-based MCP client. Two tools, no bloat.
 
-Built on Gemini's native image generation API (`generateContent`), not the deprecated Imagen API. If you're migrating from Imagen (shutting down August 17, 2026 — Google's recommended replacement is `gemini-3.1-flash-image`), this is what you move to — multi-turn editing, reference images, and all the features Imagen didn't have.
+Built for agents: a single call returns a *saved image* — or, with one-call background removal, a ready-to-use transparent PNG — without streaming image data through your agent's context. Uses Gemini's `generateContent` API (not the deprecated Imagen API).
 
 ## Install
 
@@ -42,7 +42,7 @@ npx @jimothy-snicket/gemini-image-mcp --init --local
 - **Text-to-image** — describe what you want, get an image
 - **Image editing** — provide reference images and an editing instruction
 - **Transparent assets in one call** — `removeBackground` returns a clean transparent PNG: a local AI matte (works on any subject; optional add-on, see below) by default, or built-in green-screen / white-threshold keying. No extra API cost
-- **Multi-turn sessions** — iteratively refine images with conversation history
+- **Multi-turn edits** — pass a `sessionId` to refine an image across calls, with prior turns kept as context
 - **Multi-image input** — up to ~14 reference images on gemini-3.1-flash-image (~11 on gemini-3-pro-image)
 - **Cost reporting** — every response includes token counts, estimated USD cost, and session totals
 - **Rate limiting** — configurable per-hour caps on requests and cost to prevent runaway agents
@@ -283,8 +283,8 @@ Models with no entry (built-in or override) still generate — their cost is rep
 **Image editing:**
 > "Take this screenshot and redesign the header with a dark theme" (with image paths)
 
-**Multi-turn refinement:**
-> "Draw a logo for a coffee shop" → get result with `sessionId` → "Make it more minimal" (pass `sessionId` back)
+**Iterative editing (multi-turn):**
+> Generate an image, then call again with the returned `sessionId` and a refinement like "make it more minimal" — the prior image stays in context.
 
 **Organized output:**
 > "Generate a hero banner" with `filename: "hero"`, `subfolder: "landing-page"` → saves to `~/gemini-images/landing-page/hero.png`

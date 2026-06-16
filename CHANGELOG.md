@@ -2,7 +2,7 @@
 
 All notable changes to this project.
 
-## [Unreleased]
+## [0.5.0] - 2026-06-16
 
 ### Added
 - **One-call transparent assets** — `generate_image` accepts `removeBackground` to return a transparent PNG in a single call. Default `{ "mode": "auto" }` runs a local AI semantic matte (BiRefNet via `@huggingface/transformers`, MIT model, pinned revision) that works on any subject — including green/yellow and glass/reflective subjects that chroma key can't handle — at no extra API cost (the model downloads once on first use, then runs locally). `{ "mode": "chroma" }` (green screen) and `{ "mode": "threshold" }` (white, for line art) reuse the existing zero-dependency sharp pipeline. If background removal is requested but the matte model can't load, the original image is still saved with a warning (a paid generation is never discarded).

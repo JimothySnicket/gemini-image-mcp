@@ -88,8 +88,8 @@ server.registerTool(
       sessionId: z
         .optional(z.string())
         .describe(
-          "Continue a multi-turn editing session. Pass the sessionId from a previous response " +
-            "to refine the image iteratively. The server preserves conversation history.",
+          "Continue a multi-turn edit. Pass the sessionId from a previous response to refine " +
+            "that image across calls — the server keeps the prior turns as context.",
         ),
       seed: z
         .optional(z.number().int())

@@ -1,6 +1,6 @@
 {
   "name": "gemini-image-mcp",
-  "version": "0.4.1",
+  "version": "0.5.0",
   "description": "Google Gemini image generation and editing via MCP",
   "mcpServers": {
     "gemini-image": {
