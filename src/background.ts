@@ -5,11 +5,14 @@ import { log } from "./utils.js";
 //
 // Three modes:
 //   - "auto"      → AI semantic matte (BiRefNet via transformers.js). Works on ANY
-//                   subject/colour, needs no special prompt. Lazy-loaded; the model
-//                   downloads once on first use, then runs locally. The default ONNX
-//                   backend is the bundled native onnxruntime-node CPU binding (prebuilt
-//                   for win/mac/linux x64/arm64); loadMattePipeline falls back to the
-//                   WASM backend if the native binding can't load (e.g. musl/Alpine).
+//                   subject/colour, needs no special prompt. Requires the OPTIONAL
+//                   '@huggingface/transformers' peer dep — kept OUT of the default
+//                   install to stay lightweight (~89MB base vs ~340MB+ with it); if it's
+//                   absent, matteToPng throws actionable install/fallback guidance.
+//                   Lazy-loaded; fp16 weights (~109MB) download once on first use, then
+//                   run locally. Default backend is the bundled native onnxruntime-node
+//                   CPU binding (prebuilt for win/mac/linux x64/arm64); falls back to
+//                   the WASM backend if the native binding can't load (e.g. musl/Alpine).
 //   - "chroma"    → HSV green-screen key (the original sharp pipeline). Zero-dep, instant.
 //   - "threshold" → near-white removal (line art / logos). Zero-dep, instant.
 
@@ -186,8 +189,11 @@ async function loadMattePipeline(): Promise<unknown> {
       log.info(
         `[background] loading matte model ${MATTE_MODEL_ID}@${MATTE_MODEL_REVISION.slice(0, 8)} — first use downloads it once (~one-time), then it is cached locally.`,
       );
+      // fp16 weights (~109MB) instead of fp32 (~214MB) — half the one-time download,
+      // negligible matte-quality loss.
+      const modelOpts = { revision: MATTE_MODEL_REVISION, dtype: "fp16" as const };
       try {
-        const p = await pipeline("background-removal", MATTE_MODEL_ID, { revision: MATTE_MODEL_REVISION });
+        const p = await pipeline("background-removal", MATTE_MODEL_ID, modelOpts);
         log.info("[background] matte model ready");
         return p;
       } catch (nativeErr) {
@@ -196,10 +202,7 @@ async function loadMattePipeline(): Promise<unknown> {
         // fails — fall back to the WASM backend so the matte still works.
         const m = nativeErr instanceof Error ? nativeErr.message : String(nativeErr);
         log.info(`[background] native ONNX backend unavailable (${m}); retrying matte on WASM`);
-        const p = await pipeline("background-removal", MATTE_MODEL_ID, {
-          revision: MATTE_MODEL_REVISION,
-          device: "wasm",
-        });
+        const p = await pipeline("background-removal", MATTE_MODEL_ID, { ...modelOpts, device: "wasm" });
         log.info("[background] matte model ready (WASM)");
         return p;
       }
@@ -225,10 +228,11 @@ export async function matteToPng(inputBuffer: Buffer): Promise<Buffer> {
     const msg = err instanceof Error ? err.message : String(err);
     // Keep the raw cause (which can include local cache paths) out of the user-facing
     // message; log it for debugging and surface only actionable guidance.
-    log.debug(`[background] matte model load failed: ${msg}`);
+    log.debug(`[background] matte unavailable: ${msg}`);
     throw new Error(
-      `Could not load the background-removal model (${MATTE_MODEL_ID}). ` +
-        `Use removeBackground { "mode": "chroma" } (green screen) or { "mode": "threshold" } (white) for a zero-dependency alternative.`,
+      `The 'auto' AI matte is unavailable. It needs the optional '@huggingface/transformers' ` +
+        `package and a one-time model download — install it with \`npm i @huggingface/transformers\`, ` +
+        `or use removeBackground { "mode": "chroma" } / { "mode": "threshold" } (zero-dependency).`,
     );
   }
 

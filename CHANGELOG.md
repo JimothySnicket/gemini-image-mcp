@@ -15,7 +15,7 @@ All notable changes to this project.
 - `removeBackground.color` is hex-validated on both tools.
 
 ### Notes
-- New dependency `@huggingface/transformers` (Apache-2.0). The matte runs on the bundled native onnxruntime CPU binding by default, with a WASM fallback for platforms without a prebuilt binary. Background removal is opt-in, so users who only generate images don't trigger the model download.
+- `mode: "auto"` (AI matte) needs the **optional** peer dependency `@huggingface/transformers` (Apache-2.0). It is deliberately **not** bundled, so the default install stays light (~89 MB) — enable AI cutouts with a one-time `npm i @huggingface/transformers` (~340 MB). `generate`, `chroma`, and `threshold` need nothing extra. The matte uses fp16 weights (~109 MB, downloaded on first use and cached), the native onnxruntime CPU binding by default, with a WASM fallback for platforms without a prebuilt binary. If the package is absent, `auto` keeps the original image and tells the user how to enable it.
 
 ## [0.4.1] - 2026-06-15
 

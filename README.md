@@ -41,7 +41,7 @@ npx @jimothy-snicket/gemini-image-mcp --init --local
 ### generate_image — AI-powered
 - **Text-to-image** — describe what you want, get an image
 - **Image editing** — provide reference images and an editing instruction
-- **Transparent assets in one call** — `removeBackground` returns a clean transparent PNG: a local AI matte (works on any subject) by default, or green-screen / white-threshold keying. No extra API cost
+- **Transparent assets in one call** — `removeBackground` returns a clean transparent PNG: a local AI matte (works on any subject; optional add-on, see below) by default, or built-in green-screen / white-threshold keying. No extra API cost
 - **Multi-turn sessions** — iteratively refine images with conversation history
 - **Multi-image input** — up to ~14 reference images on gemini-3.1-flash-image (~11 on gemini-3-pro-image)
 - **Cost reporting** — every response includes token counts, estimated USD cost, and session totals
@@ -345,7 +345,7 @@ Local image processing via sharp. Free, fast, no API calls.
 {"mode": "chroma", "color": "#0000FF", "tolerance": 60}
 ```
 
-`mode: "auto"` runs a local BiRefNet matte (via `@huggingface/transformers`) that isolates the subject semantically — so it handles hair, glass, and green/yellow subjects that chroma key can't. The model downloads once on first use, then runs locally with no extra API cost; if it can't load, the response keeps the original image and points you to `chroma`/`threshold`.
+`mode: "auto"` runs a local BiRefNet matte that isolates the subject semantically — so it handles hair, glass, and green/yellow subjects that chroma key can't. **It's an opt-in add-on:** to keep the base install lightweight, the matte engine isn't bundled — enable it once with `npm i @huggingface/transformers` (~340 MB; the tool tells you this if you call `auto` without it, and falls back to keeping the original image). The model (~109 MB, fp16) downloads on first use, then runs locally with no extra API cost. `chroma` and `threshold` need nothing extra.
 
 Chroma key (`mode: "chroma"`) uses HSV keying with smoothstep feathering, spill suppression, and 5-pass edge anti-aliasing (default tolerance 80). Use `#00FF00` for AI-generated green screens — it works better than matching the exact shade Gemini produces.
 
