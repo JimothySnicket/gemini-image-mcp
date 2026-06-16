@@ -15,7 +15,7 @@ All notable changes to this project.
 - `removeBackground.color` is hex-validated on both tools.
 
 ### Notes
-- `mode: "auto"` (AI matte) needs the **optional** peer dependency `@huggingface/transformers` (Apache-2.0). It is deliberately **not** bundled, so the default install stays light (~89 MB) — enable AI cutouts with a one-time `npm i @huggingface/transformers` (~340 MB). `generate`, `chroma`, and `threshold` need nothing extra. The matte uses fp16 weights (~109 MB, downloaded on first use and cached), the native onnxruntime CPU binding by default, with a WASM fallback for platforms without a prebuilt binary. If the package is absent, `auto` keeps the original image and tells the user how to enable it.
+- `mode: "auto"` (AI matte) uses `@huggingface/transformers` (Apache-2.0), an **optional** peer dependency that is deliberately **not** bundled, so the default install stays light (~65 MB). On the first `auto` call the server **auto-installs** it (into a `.matte` vendor dir beside the package) plus the fp16 model (~109 MB) — a one-time pause, then it runs locally with no extra API cost. `generate`, `chroma`, and `threshold` need nothing extra. Set `GEMINI_IMAGE_AUTO_INSTALL=0` to disable auto-install; then (or if the install fails) `auto` keeps the original image and tells the user how to enable it. The matte uses the native onnxruntime CPU binding by default, with a WASM fallback for platforms without a prebuilt binary.
 
 ## [0.4.1] - 2026-06-15
 

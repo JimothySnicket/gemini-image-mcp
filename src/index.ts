@@ -108,7 +108,7 @@ server.registerTool(
               .describe(
                 "How to cut out the background. 'auto' (default) = local AI semantic matte (BiRefNet): " +
                   "best quality, works on ANY subject incl. green/yellow/glass/reflective, no special prompt, no extra API cost. " +
-                  "Needs the optional '@huggingface/transformers' package (npm i @huggingface/transformers); if absent, the call still returns the image with install instructions. " +
+                  "On first use the matte engine ('@huggingface/transformers') auto-installs (a one-time pause; set GEMINI_IMAGE_AUTO_INSTALL=0 to disable, then it falls back with install instructions). " +
                   "'chroma' = generate on a green screen then HSV-key it (zero-dependency, instant, but can damage " +
                   "green/yellow/reflective subjects — prefer 'auto' for those). 'threshold' = generate on white then remove white (line art / logos).",
               ),

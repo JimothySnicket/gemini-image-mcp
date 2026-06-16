@@ -1,5 +1,12 @@
 import sharp from "sharp";
+import { createRequire } from "node:module";
+import { execFile } from "node:child_process";
+import { existsSync, mkdirSync, writeFileSync } from "node:fs";
+import { join } from "node:path";
+import { fileURLToPath } from "node:url";
 import { log } from "./utils.js";
+
+const require = createRequire(import.meta.url);
 
 // Shared background-removal engine used by both generate_image and process_image.
 //
@@ -178,14 +185,110 @@ export function keyBackgroundPixels(
 
 // --- ML semantic matte (lazy-loaded; never touches server startup) ---
 
-// Cached pipeline promise. transformers.js + the model are only imported/loaded
-// the first time an "auto" removal is requested, so startup stays light.
+// transformers.js is an OPTIONAL peer dep, kept out of the default install. On first
+// "auto" use we load it; if it's absent we install it on demand so the call can pause,
+// fetch the dependency, and then continue (rather than just falling back). Loaded via
+// require (CJS entry) so a just-installed package resolves within the SAME process — a
+// dynamic import() can cache the not-found resolution and miss it.
+const TRANSFORMERS_PKG = "@huggingface/transformers";
+const TRANSFORMERS_VERSION = "4.2.0";
+
+// On-demand install goes into an isolated vendor dir with its OWN package.json. Installing
+// the package directly into the server package is a no-op — npm sees it as the (optional)
+// peer dep and reports "up to date" — so we give it a clean project to install into, and
+// load it by absolute path (which also avoids the bare-specifier resolution cache).
+const VENDOR_DIR = fileURLToPath(new URL("../.matte/", import.meta.url)); // pkgRoot/.matte/
+const VENDOR_MODULE = join(VENDOR_DIR, "node_modules", "@huggingface", "transformers");
+
+/** Runtime auto-install is ON by default; opt out with GEMINI_IMAGE_AUTO_INSTALL=0 (or false). */
+function autoInstallEnabled(): boolean {
+  const v = process.env.GEMINI_IMAGE_AUTO_INSTALL;
+  return !(v === "0" || (typeof v === "string" && v.toLowerCase() === "false"));
+}
+
+// Where to require transformers from, WITHOUT a failing require()/resolve (which can poison
+// Node's resolution cache). Returns a require target — the bare name when it's already in the
+// normal search path (dev/peer install), the vendor absolute path when installed on demand,
+// or null when absent.
+function transformersTarget(): string | null {
+  const paths = require.resolve.paths(TRANSFORMERS_PKG) ?? [];
+  if (paths.some((p) => existsSync(join(p, "@huggingface", "transformers", "package.json")))) {
+    return TRANSFORMERS_PKG;
+  }
+  if (existsSync(join(VENDOR_MODULE, "package.json"))) return VENDOR_MODULE;
+  return null;
+}
+
+// Single-flight install so concurrent "auto" calls don't each spawn npm.
+let installPromise: Promise<void> | null = null;
+function installTransformers(): Promise<void> {
+  if (!installPromise) {
+    installPromise = new Promise<void>((resolve, reject) => {
+      log.info(
+        `[background] 'auto' matte needs ${TRANSFORMERS_PKG} — installing it once into ${VENDOR_DIR} ` +
+          `(this can take a minute). Set GEMINI_IMAGE_AUTO_INSTALL=0 to disable.`,
+      );
+      try {
+        mkdirSync(VENDOR_DIR, { recursive: true });
+        writeFileSync(
+          join(VENDOR_DIR, "package.json"),
+          JSON.stringify({
+            name: "gemini-image-matte-deps",
+            private: true,
+            dependencies: { [TRANSFORMERS_PKG]: TRANSFORMERS_VERSION },
+          }),
+        );
+      } catch (e) {
+        installPromise = null;
+        reject(e);
+        return;
+      }
+      // shell:true so Windows resolves npm.cmd via PATHEXT (Node can't spawn a .cmd
+      // directly). Args are fixed constants (no user input) — no injection surface.
+      execFile(
+        "npm",
+        ["install", "--no-audit", "--no-fund", "--omit=dev"],
+        { cwd: VENDOR_DIR, timeout: 5 * 60_000, windowsHide: true, maxBuffer: 64 * 1024 * 1024, shell: true },
+        (err) => {
+          if (err) {
+            installPromise = null; // allow a later retry
+            log.error(`[background] auto-install of ${TRANSFORMERS_PKG} failed: ${err.message}`);
+            reject(err);
+          } else {
+            log.info(`[background] ${TRANSFORMERS_PKG} installed`);
+            resolve();
+          }
+        },
+      );
+    });
+  }
+  return installPromise;
+}
+
+/**
+ * Load transformers.js, installing it on demand if absent (and auto-install is enabled).
+ * Throws if it can't be made available — matteToPng turns that into actionable guidance.
+ */
+async function loadTransformers(): Promise<Record<string, unknown>> {
+  if (!transformersTarget() && autoInstallEnabled()) {
+    await installTransformers();
+  }
+  const target = transformersTarget();
+  if (!target) throw new Error(`${TRANSFORMERS_PKG} is not available`);
+  // require by name (already in search path) or by absolute vendor path — both resolve
+  // cleanly because we only require once the package is confirmed on disk.
+  return require(target) as Record<string, unknown>;
+}
+
+// Cached pipeline promise. transformers.js + the model are only loaded the first time
+// an "auto" removal is requested, so startup stays light.
 let mattePipelinePromise: Promise<unknown> | null = null;
 
 async function loadMattePipeline(): Promise<unknown> {
   if (!mattePipelinePromise) {
     mattePipelinePromise = (async () => {
-      const { pipeline } = await import("@huggingface/transformers");
+      const tf = await loadTransformers();
+      const pipeline = tf.pipeline as (task: string, model: string, opts?: unknown) => Promise<unknown>;
       log.info(
         `[background] loading matte model ${MATTE_MODEL_ID}@${MATTE_MODEL_REVISION.slice(0, 8)} — first use downloads it once (~one-time), then it is cached locally.`,
       );
@@ -230,13 +333,15 @@ export async function matteToPng(inputBuffer: Buffer): Promise<Buffer> {
     // message; log it for debugging and surface only actionable guidance.
     log.debug(`[background] matte unavailable: ${msg}`);
     throw new Error(
-      `The 'auto' AI matte is unavailable. It needs the optional '@huggingface/transformers' ` +
-        `package and a one-time model download — install it with \`npm i @huggingface/transformers\`, ` +
-        `or use removeBackground { "mode": "chroma" } / { "mode": "threshold" } (zero-dependency).`,
+      `The 'auto' AI matte is unavailable — couldn't load or auto-install '${TRANSFORMERS_PKG}'. ` +
+        `Install it manually (\`npm i @huggingface/transformers\`) or use removeBackground ` +
+        `{ "mode": "chroma" } / { "mode": "threshold" } (zero-dependency). ` +
+        `Runtime auto-install is on by default; GEMINI_IMAGE_AUTO_INSTALL=0 disables it.`,
     );
   }
 
-  const { RawImage } = await import("@huggingface/transformers");
+  const tf = await loadTransformers();
+  const RawImage = tf.RawImage as { fromBlob(blob: Blob): Promise<unknown> };
   const image = await RawImage.fromBlob(new Blob([new Uint8Array(inputBuffer)]));
   // The background-removal pipeline returns a single RawImage (RGBA) for a single input.
   const result = await (segmenter as (img: unknown) => Promise<unknown>)(image);

@@ -170,6 +170,7 @@ All optional. The only required setup is `GEMINI_API_KEY` (covered above).
 | `MAX_REQUESTS_PER_HOUR` | `0` (unlimited) | Max image generations per rolling hour |
 | `MAX_COST_PER_HOUR` | `0` (unlimited) | Max estimated cost (USD) per rolling hour |
 | `SESSION_TIMEOUT_MS` | `1800000` (30min) | Multi-turn session expiry |
+| `GEMINI_IMAGE_AUTO_INSTALL` | `1` (on) | Auto-install the AI matte engine on first `removeBackground: { mode: "auto" }` use. Set `0` to disable (then `auto` falls back to chroma/threshold with instructions) |
 
 Set these the same way as `GEMINI_API_KEY`, or pass them in the `env` block of your MCP config.
 
@@ -345,7 +346,7 @@ Local image processing via sharp. Free, fast, no API calls.
 {"mode": "chroma", "color": "#0000FF", "tolerance": 60}
 ```
 
-`mode: "auto"` runs a local BiRefNet matte that isolates the subject semantically — so it handles hair, glass, and green/yellow subjects that chroma key can't. **It's an opt-in add-on:** to keep the base install lightweight, the matte engine isn't bundled — enable it once with `npm i @huggingface/transformers` (~340 MB; the tool tells you this if you call `auto` without it, and falls back to keeping the original image). The model (~109 MB, fp16) downloads on first use, then runs locally with no extra API cost. `chroma` and `threshold` need nothing extra.
+`mode: "auto"` runs a local BiRefNet matte that isolates the subject semantically — so it handles hair, glass, and green/yellow subjects that chroma key can't. **The matte engine isn't bundled** (keeps the base install ~65 MB). On your first `auto` call the server auto-installs it (`@huggingface/transformers`, ~340 MB) plus the fp16 model (~109 MB) — a one-time pause of a minute or two, then it runs locally with no extra API cost. Set `GEMINI_IMAGE_AUTO_INSTALL=0` to disable auto-install (then `auto` falls back to returning the image with instructions to install it manually). `chroma` and `threshold` need nothing extra.
 
 Chroma key (`mode: "chroma"`) uses HSV keying with smoothstep feathering, spill suppression, and 5-pass edge anti-aliasing (default tolerance 80). Use `#00FF00` for AI-generated green screens — it works better than matching the exact shade Gemini produces.
 
