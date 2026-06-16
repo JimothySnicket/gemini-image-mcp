@@ -12,8 +12,8 @@ import {
 } from "./tracker.js";
 import { log, resolveOutputDir, saveImage } from "./utils.js";
 import {
-  backgroundPromptSuffix,
-  removeBackgroundToPng,
+  applyOptionalBackgroundRemoval,
+  buildPromptText,
   type RemoveBgOptions,
 } from "./background.js";
 
@@ -250,12 +250,9 @@ export async function generateImage(
     }
   }
 
-  // Add the text prompt. For chroma/threshold removal, append an instruction so
-  // the model produces a keyable solid background; "auto" (matte) needs none.
-  const promptText = params.removeBackground
-    ? params.prompt + backgroundPromptSuffix(params.removeBackground)
-    : params.prompt;
-  userParts.push({ text: promptText });
+  // Add the text prompt. For chroma/threshold removal a background instruction is
+  // appended so the model produces a keyable solid background; "auto" needs none.
+  userParts.push({ text: buildPromptText(params.prompt, params.removeBackground) });
 
   // Build contents — from session history or fresh
   let sessionId = params.sessionId;
@@ -403,28 +400,14 @@ export async function generateImage(
   }
 
   // Optional one-call background removal → transparent PNG. Runs locally on the
-  // generated image. If it fails (e.g. matte model can't load), keep the paid
-  // generation: save the opaque image and report the problem in the response.
-  const operations: string[] = [];
-  let backgroundRemoved = false;
-  let warning: string | undefined;
-  if (params.removeBackground) {
-    try {
-      const { buffer, operation } = await removeBackgroundToPng(
-        Buffer.from(imageData, "base64"),
-        params.removeBackground,
-      );
-      imageData = buffer.toString("base64");
-      imageMimeType = "image/png";
-      operations.push(operation);
-      backgroundRemoved = true;
-      log.info(`Background removed: ${operation}`);
-    } catch (err) {
-      const msg = err instanceof Error ? err.message : String(err);
-      warning = `Background removal failed (${msg}). Saved the original opaque image instead.`;
-      log.error(warning);
-    }
-  }
+  // generated image and NEVER discards a paid generation: applyOptionalBackgroundRemoval
+  // falls back to the opaque image with a warning if removal throws.
+  const removal = await applyOptionalBackgroundRemoval(imageData, imageMimeType, params.removeBackground);
+  imageData = removal.imageData;
+  imageMimeType = removal.mimeType;
+  const operations = removal.operations;
+  const backgroundRemoved = removal.backgroundRemoved;
+  const warning = removal.warning;
 
   // Save image
   const outputDir = resolveOutputDir(params.outputDir, config.outputDir);

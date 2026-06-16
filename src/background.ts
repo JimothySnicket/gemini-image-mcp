@@ -6,8 +6,10 @@ import { log } from "./utils.js";
 // Three modes:
 //   - "auto"      → AI semantic matte (BiRefNet via transformers.js). Works on ANY
 //                   subject/colour, needs no special prompt. Lazy-loaded; the model
-//                   downloads once on first use, then runs locally (pure-WASM capable,
-//                   no native binary required).
+//                   downloads once on first use, then runs locally. The default ONNX
+//                   backend is the bundled native onnxruntime-node CPU binding (prebuilt
+//                   for win/mac/linux x64/arm64); loadMattePipeline falls back to the
+//                   WASM backend if the native binding can't load (e.g. musl/Alpine).
 //   - "chroma"    → HSV green-screen key (the original sharp pipeline). Zero-dep, instant.
 //   - "threshold" → near-white removal (line art / logos). Zero-dep, instant.
 
@@ -28,7 +30,10 @@ export const DEFAULT_TOLERANCE = 80;
 export const DEFAULT_THRESHOLD = 240;
 
 // BiRefNet lite — MIT-licensed, transformers.js-compatible semantic matting model.
+// Pinned to an immutable commit so a hub re-push can't silently swap the weights on a
+// cold download; bump deliberately and re-verify (mirrors the pricing-verification discipline).
 export const MATTE_MODEL_ID = "onnx-community/BiRefNet_lite-ONNX";
+export const MATTE_MODEL_REVISION = "de15b22ba131738a16dff04aab8bdf8dc32e3ac1"; // verified 2026-06-16
 
 // --- Chroma-key helpers (moved verbatim from process.ts; behaviour unchanged) ---
 
@@ -81,6 +86,11 @@ export function keyBackgroundPixels(
     const targetR = parseInt(hex.slice(0, 2), 16);
     const targetG = parseInt(hex.slice(2, 4), 16);
     const targetB = parseInt(hex.slice(4, 6), 16);
+    if (Number.isNaN(targetR) || Number.isNaN(targetG) || Number.isNaN(targetB)) {
+      // Defends the config path (which bypasses the per-request zod hex check). A bad
+      // colour throws rather than silently producing an opaque "successful" cutout.
+      throw new Error(`Invalid chroma color "${color}" — expected a 6-digit hex like #00FF00.`);
+    }
     const [targetH] = rgbToHsv(targetR, targetG, targetB);
 
     // Tolerance maps to hue degrees — wide feather for anti-aliased edges
@@ -174,11 +184,25 @@ async function loadMattePipeline(): Promise<unknown> {
     mattePipelinePromise = (async () => {
       const { pipeline } = await import("@huggingface/transformers");
       log.info(
-        `[background] loading matte model ${MATTE_MODEL_ID} — first use downloads it once (~one-time), then it is cached locally.`,
+        `[background] loading matte model ${MATTE_MODEL_ID}@${MATTE_MODEL_REVISION.slice(0, 8)} — first use downloads it once (~one-time), then it is cached locally.`,
       );
-      const p = await pipeline("background-removal", MATTE_MODEL_ID);
-      log.info("[background] matte model ready");
-      return p;
+      try {
+        const p = await pipeline("background-removal", MATTE_MODEL_ID, { revision: MATTE_MODEL_REVISION });
+        log.info("[background] matte model ready");
+        return p;
+      } catch (nativeErr) {
+        // Default backend is the bundled native onnxruntime-node CPU binding. On a
+        // platform with no bundled binary (e.g. musl/Alpine, unusual arch) that load
+        // fails — fall back to the WASM backend so the matte still works.
+        const m = nativeErr instanceof Error ? nativeErr.message : String(nativeErr);
+        log.info(`[background] native ONNX backend unavailable (${m}); retrying matte on WASM`);
+        const p = await pipeline("background-removal", MATTE_MODEL_ID, {
+          revision: MATTE_MODEL_REVISION,
+          device: "wasm",
+        });
+        log.info("[background] matte model ready (WASM)");
+        return p;
+      }
     })().catch((err) => {
       // Reset so a later request can retry (e.g. transient network failure).
       mattePipelinePromise = null;
@@ -199,8 +223,11 @@ export async function matteToPng(inputBuffer: Buffer): Promise<Buffer> {
     segmenter = await loadMattePipeline();
   } catch (err) {
     const msg = err instanceof Error ? err.message : String(err);
+    // Keep the raw cause (which can include local cache paths) out of the user-facing
+    // message; log it for debugging and surface only actionable guidance.
+    log.debug(`[background] matte model load failed: ${msg}`);
     throw new Error(
-      `Could not load the background-removal model (${MATTE_MODEL_ID}): ${msg}. ` +
+      `Could not load the background-removal model (${MATTE_MODEL_ID}). ` +
         `Use removeBackground { "mode": "chroma" } (green screen) or { "mode": "threshold" } (white) for a zero-dependency alternative.`,
     );
   }
@@ -258,8 +285,14 @@ export async function removeBackgroundToPng(
  *   - process_image passes "threshold" to preserve its legacy behaviour
  *     (no hints → threshold; a bare `{}` does NOT trigger a model download).
  */
+const VALID_MODES: readonly RemoveBgMode[] = ["auto", "chroma", "threshold"];
+
 export function resolveMode(opts: RemoveBgOptions, fallback: RemoveBgMode = "auto"): RemoveBgMode {
-  if (opts.mode) return opts.mode;
+  if (opts.mode) {
+    if (VALID_MODES.includes(opts.mode)) return opts.mode;
+    // Config-file defaults bypass the per-request zod enum; ignore an unknown mode.
+    log.info(`[background] ignoring unrecognised removeBackground mode "${opts.mode}"`);
+  }
   if (opts.color) return "chroma";
   if (opts.threshold !== undefined) return "threshold";
   return fallback;
@@ -282,4 +315,49 @@ export function backgroundPromptSuffix(opts: RemoveBgOptions): string {
     return " Place the subject on a solid pure-white (#FFFFFF) background with even lighting and no shadows.";
   }
   return ""; // auto: the matte handles any background
+}
+
+/**
+ * Build the text prompt sent to the model: appends a background instruction for
+ * chroma/threshold removal, leaves it untouched for "auto" or when removal is off.
+ */
+export function buildPromptText(prompt: string, opts?: RemoveBgOptions): string {
+  return opts ? prompt + backgroundPromptSuffix(opts) : prompt;
+}
+
+export interface OptionalRemovalResult {
+  imageData: string;
+  mimeType: string;
+  operations: string[];
+  backgroundRemoved: boolean;
+  warning?: string;
+}
+
+/**
+ * Apply optional background removal to a generated image and ALWAYS return a usable
+ * result. If removal throws (e.g. the matte model can't load), the original opaque
+ * image is returned unchanged with a warning — never discarding a paid generation.
+ * `imageData` is base64; the returned `imageData` is base64 PNG when removal succeeds.
+ */
+export async function applyOptionalBackgroundRemoval(
+  imageData: string,
+  mimeType: string,
+  opts: RemoveBgOptions | undefined,
+): Promise<OptionalRemovalResult> {
+  if (!opts) return { imageData, mimeType, operations: [], backgroundRemoved: false };
+  try {
+    const { buffer, operation } = await removeBackgroundToPng(Buffer.from(imageData, "base64"), opts);
+    log.info(`[background] removed: ${operation}`);
+    return {
+      imageData: buffer.toString("base64"),
+      mimeType: "image/png",
+      operations: [operation],
+      backgroundRemoved: true,
+    };
+  } catch (err) {
+    const msg = err instanceof Error ? err.message : String(err);
+    const warning = `Background removal failed: ${msg} The original opaque image was saved instead.`;
+    log.error(`[background] ${warning}`);
+    return { imageData, mimeType, operations: [], backgroundRemoved: false, warning };
+  }
 }

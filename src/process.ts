@@ -1,5 +1,5 @@
 import sharp from "sharp";
-import { existsSync } from "fs";
+import { existsSync, statSync } from "fs";
 import { log, resolveOutputDir, saveImage } from "./utils.js";
 import { loadConfig } from "./config.js";
 import {
@@ -51,6 +51,14 @@ export async function processImage(
 ): Promise<ProcessImageResult> {
   if (!existsSync(params.imagePath)) {
     throw new Error(`Image not found: ${params.imagePath}`);
+  }
+
+  // Cap input size (mirrors generate_image's 50MB guard). "auto" matte in particular
+  // decodes the whole image into memory; this bounds a looping agent's footprint.
+  const MAX_IMAGE_SIZE = 50 * 1024 * 1024;
+  const inputSize = statSync(params.imagePath).size;
+  if (inputSize > MAX_IMAGE_SIZE) {
+    throw new Error(`Image file is ${Math.round(inputSize / 1024 / 1024)}MB, max is 50MB.`);
   }
 
   const operations: string[] = [];
@@ -164,8 +172,13 @@ export async function processImage(
     operations.push(`resize(${w}x${h})`);
   }
 
-  // Determine output format
-  const outputFormat = params.format ?? (metadata.format as "png" | "jpeg" | "webp") ?? "png";
+  // Determine output format. If we removed the background, force an alpha-capable
+  // format (PNG) unless the caller explicitly chose one — otherwise a JPEG input would
+  // re-encode to JPEG and silently flatten the transparency we just computed.
+  const outputFormat =
+    params.format ??
+    (params.removeBackground ? "png" : (metadata.format as "png" | "jpeg" | "webp")) ??
+    "png";
   const mimeType = FORMAT_TO_MIME[outputFormat] ?? "image/png";
 
   if (outputFormat === "jpeg") {

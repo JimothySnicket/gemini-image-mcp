@@ -5,6 +5,8 @@ import {
   backgroundPromptSuffix,
   keyBackgroundPixels,
   removeBackgroundToPng,
+  applyOptionalBackgroundRemoval,
+  buildPromptText,
   DEFAULT_CHROMA_COLOR,
 } from "./background.js";
 
@@ -160,5 +162,65 @@ describe("removeBackgroundToPng (chroma/threshold)", () => {
     const white = await solidPng(16, 16, { r: 255, g: 255, b: 255 });
     const { operation } = await removeBackgroundToPng(white, { threshold: 240 });
     expect(operation).toBe("remove-bg(threshold:240)");
+  });
+});
+
+// --- hardening: invalid mode / colour (config-supplied values bypass the zod schema) ---
+
+describe("resolveMode (invalid mode hardening)", () => {
+  test("an unrecognised mode (e.g. a typo'd config default) is ignored, not passed through", () => {
+    expect(resolveMode({ mode: "bogus" } as any)).toBe("auto");
+    expect(resolveMode({ mode: "bogus" } as any, "threshold")).toBe("threshold");
+    // hints still apply when the mode is unrecognised
+    expect(resolveMode({ mode: "bogus", color: "#00FF00" } as any)).toBe("chroma");
+  });
+});
+
+describe("keyBackgroundPixels (invalid colour guard)", () => {
+  test("a malformed chroma colour throws instead of silently producing an opaque image", () => {
+    const px = solidRgba(4, 4, [0, 255, 0, 255]);
+    expect(() => keyBackgroundPixels(px, 4, 4, { color: "zzz" })).toThrow(/Invalid chroma color/);
+    expect(() => keyBackgroundPixels(px, 4, 4, { color: "#GG00FF" })).toThrow(/Invalid chroma color/);
+  });
+});
+
+describe("buildPromptText", () => {
+  test("leaves the prompt untouched with no removeBackground or in auto mode", () => {
+    expect(buildPromptText("a cat")).toBe("a cat");
+    expect(buildPromptText("a cat", { mode: "auto" })).toBe("a cat");
+  });
+  test("appends the keyable-background instruction for chroma/threshold", () => {
+    expect(buildPromptText("a cat", { mode: "chroma" })).toContain("#00FF00");
+    expect(buildPromptText("a cat", { mode: "threshold" })).toContain("#FFFFFF");
+  });
+});
+
+describe("applyOptionalBackgroundRemoval (never discards a paid generation)", () => {
+  test("passthrough when removeBackground is not requested", async () => {
+    const res = await applyOptionalBackgroundRemoval("ZGF0YQ==", "image/jpeg", undefined);
+    expect(res.backgroundRemoved).toBe(false);
+    expect(res.imageData).toBe("ZGF0YQ==");
+    expect(res.mimeType).toBe("image/jpeg");
+    expect(res.operations).toEqual([]);
+    expect(res.warning).toBeUndefined();
+  });
+
+  test("success: returns a transparent PNG and flips backgroundRemoved", async () => {
+    const green = (await solidPng(16, 16, { r: 0, g: 255, b: 0 })).toString("base64");
+    const res = await applyOptionalBackgroundRemoval(green, "image/png", { mode: "chroma" });
+    expect(res.backgroundRemoved).toBe(true);
+    expect(res.mimeType).toBe("image/png");
+    expect(res.operations[0]).toContain("chroma-key");
+    expect(res.imageData).not.toBe(green);
+  });
+
+  test("failure: a removal error preserves the ORIGINAL image and reports a warning", async () => {
+    const garbage = Buffer.from("not-an-image").toString("base64");
+    const res = await applyOptionalBackgroundRemoval(garbage, "image/jpeg", { mode: "chroma" });
+    expect(res.backgroundRemoved).toBe(false);
+    expect(res.imageData).toBe(garbage); // paid generation NOT discarded
+    expect(res.mimeType).toBe("image/jpeg"); // unchanged
+    expect(res.operations).toEqual([]);
+    expect(res.warning).toBeTruthy();
   });
 });

@@ -111,7 +111,9 @@ server.registerTool(
                   "'chroma' = generate on a green screen then HSV-key it (zero-dependency, instant, but can damage " +
                   "green/yellow/reflective subjects — prefer 'auto' for those). 'threshold' = generate on white then remove white (line art / logos).",
               ),
-            color: z.optional(z.string()).describe("Chroma-key target hex (chroma mode only). Default #00FF00."),
+            color: z
+              .optional(z.string().regex(/^#?[0-9a-fA-F]{6}$/, "color must be a 6-digit hex, e.g. #00FF00"))
+              .describe("Chroma-key target hex (chroma mode only). Default #00FF00."),
             tolerance: z
               .optional(z.number().int().min(0).max(255))
               .describe("Chroma hue match tolerance 0-255 (chroma mode only). Default 80."),
@@ -122,7 +124,8 @@ server.registerTool(
         )
         .describe(
           "Return a transparent PNG cutout in one call. Omit for a normal opaque image. " +
-            "Default mode 'auto' runs a local AI matte (no extra API cost; first use downloads a ~one-time model).",
+            "Default mode 'auto' runs a local AI matte (no extra API cost; first use downloads a ~one-time model). " +
+            "Supplying `color` implies chroma and `threshold` implies threshold — these override the 'auto' default.",
         ),
     },
   },
@@ -212,10 +215,12 @@ server.registerTool(
             threshold: z.optional(z.number().int().min(0).max(255)).describe(
               "Brightness threshold (0-255). Pixels above this become transparent. Default 240. Threshold mode only.",
             ),
-            color: z.optional(z.string()).describe(
-              "Hex color to remove (e.g. '#00FF00' for green screen). Chroma mode. " +
-              "Use #00FF00 for AI-generated green screens — works better than matching the exact background shade.",
-            ),
+            color: z
+              .optional(z.string().regex(/^#?[0-9a-fA-F]{6}$/, "color must be a 6-digit hex, e.g. #00FF00"))
+              .describe(
+                "Hex color to remove (e.g. '#00FF00' for green screen). Chroma mode. " +
+                  "Use #00FF00 for AI-generated green screens — works better than matching the exact background shade.",
+              ),
             tolerance: z.optional(z.number().int().min(0).max(255)).describe(
               "Color match tolerance (0-255). How different a pixel can be from the target color and still be removed. Default 80.",
             ),
