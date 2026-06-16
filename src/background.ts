@@ -218,8 +218,15 @@ function transformersImportSpecifier(): string | null {
     return TRANSFORMERS_PKG;
   }
   if (existsSync(join(VENDOR_MODULE, "package.json"))) {
-    const entry = createRequire(join(VENDOR_DIR, "_resolve.cjs")).resolve(TRANSFORMERS_PKG);
-    return pathToFileURL(entry).href;
+    // Require a RESOLVABLE entry, not just a manifest: a partial/interrupted npm install can
+    // leave package.json without the actual module. Treat that as absent (return null) so the
+    // auto-install retry path re-runs instead of importing an incomplete package.
+    try {
+      const entry = createRequire(join(VENDOR_DIR, "_resolve.cjs")).resolve(TRANSFORMERS_PKG);
+      return pathToFileURL(entry).href;
+    } catch {
+      return null;
+    }
   }
   return null;
 }

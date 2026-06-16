@@ -251,13 +251,21 @@ server.registerTool(
   async (args) => {
     try {
       const config = loadConfig();
+      const removeBackground = args.removeBackground ?? config.defaults.process.removeBackground;
       const result = await processImage({
         imagePath: args.imagePath,
         crop: args.crop,
         resize: args.resize,
-        removeBackground: args.removeBackground ?? config.defaults.process.removeBackground,
+        removeBackground,
         trim: args.trim ?? config.defaults.process.trim,
-        format: (args.format ?? config.defaults.process.format) as "png" | "jpeg" | "webp" | undefined,
+        // When removing the background, don't let a configured (possibly JPEG) format default
+        // flatten the alpha — fall through to processImage's PNG default. An explicit
+        // per-request format still wins.
+        format: (args.format ?? (removeBackground ? undefined : config.defaults.process.format)) as
+          | "png"
+          | "jpeg"
+          | "webp"
+          | undefined,
         quality: args.quality ?? config.defaults.process.quality,
         outputDir: args.outputDir,
         filename: args.filename,
