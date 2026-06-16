@@ -2,35 +2,14 @@ import sharp from "sharp";
 import { existsSync } from "fs";
 import { log, resolveOutputDir, saveImage } from "./utils.js";
 import { loadConfig } from "./config.js";
-
-// --- Chroma key helpers ---
-
-function rgbToHsv(r: number, g: number, b: number): [number, number, number] {
-  r /= 255; g /= 255; b /= 255;
-  const max = Math.max(r, g, b);
-  const min = Math.min(r, g, b);
-  const d = max - min;
-  let h = 0;
-  if (d !== 0) {
-    if (max === r) h = ((g - b) / d) % 6;
-    else if (max === g) h = (b - r) / d + 2;
-    else h = (r - g) / d + 4;
-    h *= 60;
-    if (h < 0) h += 360;
-  }
-  const s = max === 0 ? 0 : d / max;
-  return [h, s, max];
-}
-
-function hueDist(h1: number, h2: number): number {
-  const d = Math.abs(h1 - h2);
-  return Math.min(d, 360 - d);
-}
-
-function smoothstep(edge0: number, edge1: number, x: number): number {
-  const t = Math.max(0, Math.min(1, (x - edge0) / (edge1 - edge0)));
-  return t * t * (3 - 2 * t);
-}
+import {
+  keyBackgroundPixels,
+  matteToPng,
+  resolveMode,
+  type RemoveBgOptions,
+  MATTE_MODEL_ID,
+  DEFAULT_CHROMA_COLOR,
+} from "./background.js";
 
 export interface ProcessImageParams {
   imagePath: string;
@@ -43,7 +22,7 @@ export interface ProcessImageParams {
     strategy?: "center" | "attention" | "entropy";
   };
   resize?: { width?: number; height?: number };
-  removeBackground?: { threshold?: number; color?: string; tolerance?: number };
+  removeBackground?: RemoveBgOptions;
   trim?: boolean;
   format?: "png" | "jpeg" | "webp";
   quality?: number;
@@ -89,105 +68,33 @@ export async function processImage(
   }
 
   if (params.removeBackground) {
-    // Get raw pixel data with alpha channel
-    const { data, info } = await pipeline
-      .ensureAlpha()
-      .raw()
-      .toBuffer({ resolveWithObject: true });
-
-    const pixels = Buffer.from(data);
-    const color = params.removeBackground.color;
-    const tolerance = params.removeBackground.tolerance ?? 80;
-
-    if (color) {
-      // HSV-based chroma key with smoothstep feather and spill suppression
-      const hex = color.replace("#", "");
-      const targetR = parseInt(hex.slice(0, 2), 16);
-      const targetG = parseInt(hex.slice(2, 4), 16);
-      const targetB = parseInt(hex.slice(4, 6), 16);
-      const [targetH] = rgbToHsv(targetR, targetG, targetB);
-
-      // Tolerance maps to hue degrees — wide feather for anti-aliased edges
-      const hueHard = tolerance * 0.6;
-      const hueSoft = tolerance * 1.4;
-      const minSat = 0.12;
-      const minVal = 0.08;
-
-      // Pass 1: Alpha keying in HSV space
-      for (let i = 0; i < pixels.length; i += 4) {
-        const [h, s, v] = rgbToHsv(pixels[i], pixels[i + 1], pixels[i + 2]);
-        if (s < minSat || v < minVal) continue; // skip grey/dark pixels
-
-        const hd = hueDist(h, targetH);
-        if (hd <= hueHard) {
-          pixels[i + 3] = 0;
-        } else if (hd <= hueSoft) {
-          const alpha = smoothstep(hueHard, hueSoft, hd);
-          pixels[i + 3] = Math.min(pixels[i + 3], Math.round(alpha * 255));
-        }
-      }
-
-      // Pass 2: Spill suppression — remove green fringe on surviving pixels
-      for (let i = 0; i < pixels.length; i += 4) {
-        if (pixels[i + 3] === 0) continue;
-        const r = pixels[i];
-        const g = pixels[i + 1];
-        const b = pixels[i + 2];
-        const spillLimit = (r + b) / 2;
-        if (g > spillLimit) {
-          const alpha01 = pixels[i + 3] / 255;
-          const strength = 1 - alpha01;
-          const corrected = spillLimit + (g - spillLimit) * (1 - Math.max(strength, 0.5));
-          pixels[i + 1] = Math.round(Math.min(255, corrected));
-        }
-      }
-
-      operations.push(`chroma-key(${color},tolerance:${tolerance})`);
+    const rb = params.removeBackground;
+    // process_image keeps its legacy default (threshold) when no mode/hints given.
+    const mode = resolveMode(rb, "threshold");
+    if (mode === "auto") {
+      // AI semantic matte: break the pipeline to a PNG buffer, matte it, resume.
+      const interim = await pipeline.png().toBuffer();
+      const matted = await matteToPng(interim);
+      pipeline = sharp(matted);
+      operations.push(`matte(${MATTE_MODEL_ID})`);
     } else {
-      // Threshold: remove near-white pixels
-      const threshold = params.removeBackground.threshold ?? 240;
-      for (let i = 0; i < pixels.length; i += 4) {
-        const r = pixels[i];
-        const g = pixels[i + 1];
-        const b = pixels[i + 2];
-        if (r >= threshold && g >= threshold && b >= threshold) {
-          pixels[i + 3] = 0;
-        }
-      }
-      operations.push(`remove-bg(threshold:${threshold})`);
+      // Chroma-key / threshold: key raw RGBA pixels in place (no encode round-trip).
+      const { data, info } = await pipeline
+        .ensureAlpha()
+        .raw()
+        .toBuffer({ resolveWithObject: true });
+      const pixels = Buffer.from(data);
+      const color = mode === "chroma" ? rb.color ?? DEFAULT_CHROMA_COLOR : undefined;
+      const operation = keyBackgroundPixels(pixels, info.width, info.height, {
+        color,
+        tolerance: rb.tolerance,
+        threshold: rb.threshold,
+      });
+      operations.push(operation);
+      pipeline = sharp(pixels, {
+        raw: { width: info.width, height: info.height, channels: 4 },
+      });
     }
-
-    // Edge softening: 5 passes of 3x3 neighbourhood alpha averaging (inward only)
-    // Creates a smooth anti-aliased edge gradient without expanding outward
-    for (let pass = 0; pass < 5; pass++) {
-      const alphaSnapshot = new Uint8Array(info.width * info.height);
-      for (let i = 0; i < alphaSnapshot.length; i++) alphaSnapshot[i] = pixels[i * 4 + 3];
-
-      for (let y = 0; y < info.height; y++) {
-        for (let x = 0; x < info.width; x++) {
-          const idx = y * info.width + x;
-          const a = alphaSnapshot[idx];
-          if (a === 0) continue;
-
-          let sum = 0, count = 0;
-          for (let dy = -1; dy <= 1; dy++) {
-            for (let dx = -1; dx <= 1; dx++) {
-              const nx = x + dx, ny = y + dy;
-              if (nx >= 0 && nx < info.width && ny >= 0 && ny < info.height) {
-                sum += alphaSnapshot[ny * info.width + nx];
-                count++;
-              }
-            }
-          }
-          pixels[idx * 4 + 3] = Math.min(a, Math.round(sum / count));
-        }
-      }
-    }
-
-    // Rebuild pipeline from modified pixels
-    pipeline = sharp(pixels, {
-      raw: { width: info.width, height: info.height, channels: 4 },
-    });
   }
 
   if (params.crop) {

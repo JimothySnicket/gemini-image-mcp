@@ -11,6 +11,11 @@ import {
   type SessionStats,
 } from "./tracker.js";
 import { log, resolveOutputDir, saveImage } from "./utils.js";
+import {
+  backgroundPromptSuffix,
+  removeBackgroundToPng,
+  type RemoveBgOptions,
+} from "./background.js";
 
 const MIME_TYPES: Record<string, string> = {
   ".png": "image/png",
@@ -33,6 +38,7 @@ export interface GenerateImageParams {
   sessionId?: string;
   seed?: number;
   useSearchGrounding?: boolean;
+  removeBackground?: RemoveBgOptions;
 }
 
 export interface GenerateImageResult {
@@ -43,6 +49,9 @@ export interface GenerateImageResult {
   sessionTurn?: number;
   usage: UsageReport;
   session: SessionStats;
+  backgroundRemoved?: boolean;
+  operations?: string[];
+  warning?: string;
 }
 
 // Bare-name fragments that mark a model as image-capable. The API exposes no
@@ -241,8 +250,12 @@ export async function generateImage(
     }
   }
 
-  // Add the text prompt
-  userParts.push({ text: params.prompt });
+  // Add the text prompt. For chroma/threshold removal, append an instruction so
+  // the model produces a keyable solid background; "auto" (matte) needs none.
+  const promptText = params.removeBackground
+    ? params.prompt + backgroundPromptSuffix(params.removeBackground)
+    : params.prompt;
+  userParts.push({ text: promptText });
 
   // Build contents — from session history or fresh
   let sessionId = params.sessionId;
@@ -389,6 +402,30 @@ export async function generateImage(
     );
   }
 
+  // Optional one-call background removal → transparent PNG. Runs locally on the
+  // generated image. If it fails (e.g. matte model can't load), keep the paid
+  // generation: save the opaque image and report the problem in the response.
+  const operations: string[] = [];
+  let backgroundRemoved = false;
+  let warning: string | undefined;
+  if (params.removeBackground) {
+    try {
+      const { buffer, operation } = await removeBackgroundToPng(
+        Buffer.from(imageData, "base64"),
+        params.removeBackground,
+      );
+      imageData = buffer.toString("base64");
+      imageMimeType = "image/png";
+      operations.push(operation);
+      backgroundRemoved = true;
+      log.info(`Background removed: ${operation}`);
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : String(err);
+      warning = `Background removal failed (${msg}). Saved the original opaque image instead.`;
+      log.error(warning);
+    }
+  }
+
   // Save image
   const outputDir = resolveOutputDir(params.outputDir, config.outputDir);
   const imagePath = await saveImage({
@@ -429,5 +466,8 @@ export async function generateImage(
     sessionTurn,
     usage,
     session: getSessionStats(),
+    backgroundRemoved: backgroundRemoved || undefined,
+    operations: operations.length ? operations : undefined,
+    warning,
   };
 }
