@@ -3,16 +3,18 @@ import { homedir } from "os";
 import { join, dirname } from "path";
 import { log } from "./utils.js";
 import type { ModelPricing } from "./pricing.js";
+import type { RemoveBgOptions } from "./background.js";
 
 // ── Types ───────────────────────────────────────────────────────────
 
 export interface GenerateDefaults {
   aspectRatio?: string;
   resolution?: string;
+  removeBackground?: RemoveBgOptions;
 }
 
 export interface ProcessDefaults {
-  removeBackground?: { threshold?: number; color?: string; tolerance?: number };
+  removeBackground?: RemoveBgOptions;
   trim?: boolean;
   format?: string;
   quality?: number;
@@ -363,8 +365,10 @@ export const CONFIG_TEMPLATE = `{
   "defaults": {
     "generate": {
       // "aspectRatio": "1:1",
-      // "resolution": "1K"
+      // "resolution": "1K",
       // Resolution: 512 (gemini-3.1-flash only), 1K, 2K, 4K (gemini-3.x); gemini-2.5-flash is 1K
+      // Always return a transparent cutout (opt-in). 'auto' = local AI matte, any subject:
+      // "removeBackground": { "mode": "auto" }
     },
     "process": {
       // "format": "png",

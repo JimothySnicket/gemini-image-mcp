@@ -331,6 +331,20 @@ describe("loadConfig", () => {
     expect(config.defaults.process.quality).toBe(85);
   });
 
+  test("deep merges removeBackground tool defaults", () => {
+    writeFileSync(
+      globalPath,
+      JSON.stringify({ defaults: { generate: { removeBackground: { mode: "auto" } } } }),
+    );
+    writeFileSync(
+      localPath,
+      JSON.stringify({ defaults: { process: { removeBackground: { color: "#00FF00" } } } }),
+    );
+    const config = loadConfig({ globalPath, localPath });
+    expect(config.defaults.generate.removeBackground).toEqual({ mode: "auto" });
+    expect(config.defaults.process.removeBackground).toEqual({ color: "#00FF00" });
+  });
+
   test("defaults to an empty pricingOverrides object", () => {
     const config = loadConfig({ globalPath, localPath });
     expect(config.pricingOverrides).toEqual({});

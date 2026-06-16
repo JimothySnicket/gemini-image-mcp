@@ -11,6 +11,11 @@ import {
   type SessionStats,
 } from "./tracker.js";
 import { log, resolveOutputDir, saveImage } from "./utils.js";
+import {
+  applyOptionalBackgroundRemoval,
+  buildPromptText,
+  type RemoveBgOptions,
+} from "./background.js";
 
 const MIME_TYPES: Record<string, string> = {
   ".png": "image/png",
@@ -33,6 +38,7 @@ export interface GenerateImageParams {
   sessionId?: string;
   seed?: number;
   useSearchGrounding?: boolean;
+  removeBackground?: RemoveBgOptions;
 }
 
 export interface GenerateImageResult {
@@ -43,6 +49,9 @@ export interface GenerateImageResult {
   sessionTurn?: number;
   usage: UsageReport;
   session: SessionStats;
+  backgroundRemoved?: boolean;
+  operations?: string[];
+  warning?: string;
 }
 
 // Bare-name fragments that mark a model as image-capable. The API exposes no
@@ -241,8 +250,9 @@ export async function generateImage(
     }
   }
 
-  // Add the text prompt
-  userParts.push({ text: params.prompt });
+  // Add the text prompt. For chroma/threshold removal a background instruction is
+  // appended so the model produces a keyable solid background; "auto" needs none.
+  userParts.push({ text: buildPromptText(params.prompt, params.removeBackground) });
 
   // Build contents — from session history or fresh
   let sessionId = params.sessionId;
@@ -389,6 +399,16 @@ export async function generateImage(
     );
   }
 
+  // Optional one-call background removal → transparent PNG. Runs locally on the
+  // generated image and NEVER discards a paid generation: applyOptionalBackgroundRemoval
+  // falls back to the opaque image with a warning if removal throws.
+  const removal = await applyOptionalBackgroundRemoval(imageData, imageMimeType, params.removeBackground);
+  imageData = removal.imageData;
+  imageMimeType = removal.mimeType;
+  const operations = removal.operations;
+  const backgroundRemoved = removal.backgroundRemoved;
+  const warning = removal.warning;
+
   // Save image
   const outputDir = resolveOutputDir(params.outputDir, config.outputDir);
   const imagePath = await saveImage({
@@ -429,5 +449,8 @@ export async function generateImage(
     sessionTurn,
     usage,
     session: getSessionStats(),
+    backgroundRemoved: backgroundRemoved || undefined,
+    operations: operations.length ? operations : undefined,
+    warning,
   };
 }

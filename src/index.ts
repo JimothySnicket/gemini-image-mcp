@@ -37,6 +37,7 @@ server.registerTool(
       "Generate or edit images using Google Gemini. " +
       "Provide just a prompt for text-to-image generation. " +
       "Add image file paths to edit or use reference images. " +
+      "Set removeBackground to get a transparent PNG cutout in one call (local AI matte; works on any subject, no extra API cost). " +
       "Returns the saved file path, model used, token counts, and estimated cost.",
     inputSchema: {
       prompt: z
@@ -99,6 +100,34 @@ server.registerTool(
           "Enable Google Search grounding for real-world accuracy. Supported on the gemini-3.x " +
             "image models; the API rejects it on models that don't support it.",
         ),
+      removeBackground: z
+        .optional(
+          z.object({
+            mode: z
+              .optional(z.enum(["auto", "chroma", "threshold"]))
+              .describe(
+                "How to cut out the background. 'auto' (default) = local AI semantic matte (BiRefNet): " +
+                  "best quality, works on ANY subject incl. green/yellow/glass/reflective, no special prompt, no extra API cost. " +
+                  "On first use the matte engine ('@huggingface/transformers') auto-installs (a one-time pause; set GEMINI_IMAGE_AUTO_INSTALL=0 to disable, then it falls back with install instructions). " +
+                  "'chroma' = generate on a green screen then HSV-key it (zero-dependency, instant, but can damage " +
+                  "green/yellow/reflective subjects — prefer 'auto' for those). 'threshold' = generate on white then remove white (line art / logos).",
+              ),
+            color: z
+              .optional(z.string().regex(/^#?[0-9a-fA-F]{6}$/, "color must be a 6-digit hex, e.g. #00FF00"))
+              .describe("Chroma-key target hex (chroma mode only). Default #00FF00."),
+            tolerance: z
+              .optional(z.number().int().min(0).max(255))
+              .describe("Chroma hue match tolerance 0-255 (chroma mode only). Default 80."),
+            threshold: z
+              .optional(z.number().int().min(0).max(255))
+              .describe("White brightness cutoff 0-255 (threshold mode only). Default 240."),
+          }),
+        )
+        .describe(
+          "Return a transparent PNG cutout in one call. Omit for a normal opaque image. " +
+            "Default mode 'auto' runs a local AI matte (no extra API cost; first use downloads a ~one-time model). " +
+            "Supplying `color` implies chroma and `threshold` implies threshold — these override the 'auto' default.",
+        ),
     },
   },
   async (args) => {
@@ -116,6 +145,7 @@ server.registerTool(
         sessionId: args.sessionId,
         seed: args.seed,
         useSearchGrounding: args.useSearchGrounding,
+        removeBackground: args.removeBackground ?? config.defaults.generate.removeBackground,
       });
 
       return {
@@ -178,19 +208,26 @@ server.registerTool(
       removeBackground: z
         .optional(
           z.object({
+            mode: z.optional(z.enum(["auto", "chroma", "threshold"])).describe(
+              "'auto' = local AI semantic matte (BiRefNet): best quality, works on any subject, no green screen needed. " +
+                "'chroma' = HSV green-screen key. 'threshold' = remove near-white. " +
+                "If omitted: 'chroma' when color is set, else 'threshold' (back-compatible).",
+            ),
             threshold: z.optional(z.number().int().min(0).max(255)).describe(
-              "Brightness threshold (0-255). Pixels above this become transparent. Default 240. Ignored if color is set.",
+              "Brightness threshold (0-255). Pixels above this become transparent. Default 240. Threshold mode only.",
             ),
-            color: z.optional(z.string()).describe(
-              "Hex color to remove (e.g. '#00FF00' for green screen). " +
-              "Use #00FF00 for AI-generated green screens — works better than matching the exact background shade.",
-            ),
+            color: z
+              .optional(z.string().regex(/^#?[0-9a-fA-F]{6}$/, "color must be a 6-digit hex, e.g. #00FF00"))
+              .describe(
+                "Hex color to remove (e.g. '#00FF00' for green screen). Chroma mode. " +
+                  "Use #00FF00 for AI-generated green screens — works better than matching the exact background shade.",
+              ),
             tolerance: z.optional(z.number().int().min(0).max(255)).describe(
               "Color match tolerance (0-255). How different a pixel can be from the target color and still be removed. Default 80.",
             ),
           }),
         )
-        .describe("Remove background. Use threshold for white backgrounds, or color for chroma key (green screen)."),
+        .describe("Remove background. mode 'auto' (AI matte, any subject), 'chroma' (green screen), or 'threshold' (white). Defaults: chroma if color set, else threshold."),
       trim: z
         .optional(z.boolean())
         .describe("Auto-trim whitespace borders"),
@@ -214,13 +251,21 @@ server.registerTool(
   async (args) => {
     try {
       const config = loadConfig();
+      const removeBackground = args.removeBackground ?? config.defaults.process.removeBackground;
       const result = await processImage({
         imagePath: args.imagePath,
         crop: args.crop,
         resize: args.resize,
-        removeBackground: args.removeBackground ?? config.defaults.process.removeBackground,
+        removeBackground,
         trim: args.trim ?? config.defaults.process.trim,
-        format: (args.format ?? config.defaults.process.format) as "png" | "jpeg" | "webp" | undefined,
+        // When removing the background, don't let a configured (possibly JPEG) format default
+        // flatten the alpha — fall through to processImage's PNG default. An explicit
+        // per-request format still wins.
+        format: (args.format ?? (removeBackground ? undefined : config.defaults.process.format)) as
+          | "png"
+          | "jpeg"
+          | "webp"
+          | undefined,
         quality: args.quality ?? config.defaults.process.quality,
         outputDir: args.outputDir,
         filename: args.filename,

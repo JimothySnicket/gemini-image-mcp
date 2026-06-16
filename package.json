@@ -47,9 +47,18 @@
     "@google/genai": "^2.8.0",
     "@modelcontextprotocol/sdk": "^1.22.0",
     "sharp": "^0.34.5",
-    "zod": "^4.4.3"
+    "zod": "3.25.76"
+  },
+  "peerDependencies": {
+    "@huggingface/transformers": "^4.2.0"
+  },
+  "peerDependenciesMeta": {
+    "@huggingface/transformers": {
+      "optional": true
+    }
   },
   "devDependencies": {
+    "@huggingface/transformers": "^4.2.0",
     "@types/node": "^25.6.0",
     "typescript": "^6.0.3"
   },

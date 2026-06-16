@@ -2,6 +2,21 @@
 
 All notable changes to this project.
 
+## [Unreleased]
+
+### Added
+- **One-call transparent assets** — `generate_image` accepts `removeBackground` to return a transparent PNG in a single call. Default `{ "mode": "auto" }` runs a local AI semantic matte (BiRefNet via `@huggingface/transformers`, MIT model, pinned revision) that works on any subject — including green/yellow and glass/reflective subjects that chroma key can't handle — at no extra API cost (the model downloads once on first use, then runs locally). `{ "mode": "chroma" }` (green screen) and `{ "mode": "threshold" }` (white, for line art) reuse the existing zero-dependency sharp pipeline. If background removal is requested but the matte model can't load, the original image is still saved with a warning (a paid generation is never discarded).
+- `process_image` gains `removeBackground` `mode: "auto"` (AI matte) alongside chroma/threshold, so any existing image can be matted.
+- Config: `defaults.generate.removeBackground` for per-project defaults (parity with `defaults.process.removeBackground`).
+
+### Changed
+- Background-removal logic factored into a shared `background.ts` module used by both tools (chroma/threshold output is unchanged).
+- When `process_image` removes a background, the output now defaults to PNG (alpha-capable) instead of the input format, so a JPEG input no longer silently flattens the transparency.
+- `removeBackground.color` is hex-validated on both tools.
+
+### Notes
+- `mode: "auto"` (AI matte) uses `@huggingface/transformers` (Apache-2.0), an **optional** peer dependency that is deliberately **not** bundled, so the default install stays light (~65 MB). On the first `auto` call the server **auto-installs** it (into a `.matte` vendor dir beside the package) plus the fp16 model (~109 MB) — a one-time pause, then it runs locally with no extra API cost. `generate`, `chroma`, and `threshold` need nothing extra. Set `GEMINI_IMAGE_AUTO_INSTALL=0` to disable auto-install; then (or if the install fails) `auto` keeps the original image and tells the user how to enable it. The matte uses the native onnxruntime CPU binding by default, with a WASM fallback for platforms without a prebuilt binary.
+
 ## [0.4.1] - 2026-06-15
 
 ### Fixed
