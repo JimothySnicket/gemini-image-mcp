@@ -3,7 +3,7 @@ import { createRequire } from "node:module";
 import { execFile } from "node:child_process";
 import { existsSync, mkdirSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
-import { fileURLToPath } from "node:url";
+import { fileURLToPath, pathToFileURL } from "node:url";
 import { log } from "./utils.js";
 
 const require = createRequire(import.meta.url);
@@ -206,16 +206,21 @@ function autoInstallEnabled(): boolean {
   return !(v === "0" || (typeof v === "string" && v.toLowerCase() === "false"));
 }
 
-// Where to require transformers from, WITHOUT a failing require()/resolve (which can poison
-// Node's resolution cache). Returns a require target — the bare name when it's already in the
-// normal search path (dev/peer install), the vendor absolute path when installed on demand,
-// or null when absent.
-function transformersTarget(): string | null {
+// A SPECIFIER to import transformers from — without ever require()-loading the module (which
+// could throw ERR_REQUIRE_ESM on Node versions before require(ESM)) and without a failing
+// resolve that could poison Node's resolution cache. Returns the bare name when it's in the
+// normal search path (dev/peer — import() then resolves the ESM build), a file:// URL to the
+// entry when we installed it on demand in the vendor dir, or null when absent. Path resolution
+// (resolve.paths / createRequire.resolve) does NOT execute the module, so it's ESM-safe.
+function transformersImportSpecifier(): string | null {
   const paths = require.resolve.paths(TRANSFORMERS_PKG) ?? [];
   if (paths.some((p) => existsSync(join(p, "@huggingface", "transformers", "package.json")))) {
     return TRANSFORMERS_PKG;
   }
-  if (existsSync(join(VENDOR_MODULE, "package.json"))) return VENDOR_MODULE;
+  if (existsSync(join(VENDOR_MODULE, "package.json"))) {
+    const entry = createRequire(join(VENDOR_DIR, "_resolve.cjs")).resolve(TRANSFORMERS_PKG);
+    return pathToFileURL(entry).href;
+  }
   return null;
 }
 
@@ -270,14 +275,17 @@ function installTransformers(): Promise<void> {
  * Throws if it can't be made available — matteToPng turns that into actionable guidance.
  */
 async function loadTransformers(): Promise<Record<string, unknown>> {
-  if (!transformersTarget() && autoInstallEnabled()) {
+  if (!transformersImportSpecifier() && autoInstallEnabled()) {
     await installTransformers();
   }
-  const target = transformersTarget();
-  if (!target) throw new Error(`${TRANSFORMERS_PKG} is not available`);
-  // require by name (already in search path) or by absolute vendor path — both resolve
-  // cleanly because we only require once the package is confirmed on disk.
-  return require(target) as Record<string, unknown>;
+  const spec = transformersImportSpecifier();
+  if (!spec) throw new Error(`${TRANSFORMERS_PKG} is not available`);
+  // Dynamic import() (never require()) so loading is ESM-safe on all supported Node versions.
+  // We only import once the package is confirmed on disk, so there's no failing earlier import
+  // to poison Node's resolution cache. A bare-name import resolves the ESM build (named exports);
+  // a file-URL import of the vendor CJS entry exposes the API under .default — handle both.
+  const mod = (await import(spec)) as Record<string, unknown> & { default?: Record<string, unknown> };
+  return (mod.pipeline ? mod : (mod.default ?? mod)) as Record<string, unknown>;
 }
 
 // Cached pipeline promise. transformers.js + the model are only loaded the first time
