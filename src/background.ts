@@ -91,16 +91,18 @@ export function keyBackgroundPixels(
   const tolerance = opts.tolerance ?? DEFAULT_TOLERANCE;
 
   if (color) {
-    // HSV-based chroma key with smoothstep feather and spill suppression
+    // HSV-based chroma key with smoothstep feather and spill suppression.
+    // Validate the WHOLE string first — the config path bypasses the per-request zod hex check,
+    // and a NaN-only guard would still accept malformed-but-parseable values like "#FFFFF"
+    // (5 digits) or "#00FF0000" (8), keying the wrong colour or truncating silently. Mirror the
+    // zod regex: optional leading # + exactly six hex digits.
+    if (!/^#?[0-9a-fA-F]{6}$/.test(color)) {
+      throw new Error(`Invalid chroma color "${color}" — expected a 6-digit hex like #00FF00.`);
+    }
     const hex = color.replace("#", "");
     const targetR = parseInt(hex.slice(0, 2), 16);
     const targetG = parseInt(hex.slice(2, 4), 16);
     const targetB = parseInt(hex.slice(4, 6), 16);
-    if (Number.isNaN(targetR) || Number.isNaN(targetG) || Number.isNaN(targetB)) {
-      // Defends the config path (which bypasses the per-request zod hex check). A bad
-      // colour throws rather than silently producing an opaque "successful" cutout.
-      throw new Error(`Invalid chroma color "${color}" — expected a 6-digit hex like #00FF00.`);
-    }
     const [targetH] = rgbToHsv(targetR, targetG, targetB);
 
     // Tolerance maps to hue degrees — wide feather for anti-aliased edges

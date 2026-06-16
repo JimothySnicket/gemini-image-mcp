@@ -181,6 +181,15 @@ describe("keyBackgroundPixels (invalid colour guard)", () => {
     const px = solidRgba(4, 4, [0, 255, 0, 255]);
     expect(() => keyBackgroundPixels(px, 4, 4, { color: "zzz" })).toThrow(/Invalid chroma color/);
     expect(() => keyBackgroundPixels(px, 4, 4, { color: "#GG00FF" })).toThrow(/Invalid chroma color/);
+    // Wrong LENGTH: parseable-but-malformed values the old NaN-only guard let through, which
+    // would key the wrong colour or silently truncate (config-supplied colours bypass zod).
+    expect(() => keyBackgroundPixels(px, 4, 4, { color: "#FFFFF" })).toThrow(/Invalid chroma color/); // 5 digits
+    expect(() => keyBackgroundPixels(px, 4, 4, { color: "#00FF0000" })).toThrow(/Invalid chroma color/); // 8 digits
+  });
+
+  test("a valid 6-digit hex is accepted with or without a leading #", () => {
+    expect(keyBackgroundPixels(solidRgba(4, 4, [0, 255, 0, 255]), 4, 4, { color: "#00FF00" })).toContain("chroma-key");
+    expect(keyBackgroundPixels(solidRgba(4, 4, [0, 255, 0, 255]), 4, 4, { color: "00FF00" })).toContain("chroma-key");
   });
 });
 
