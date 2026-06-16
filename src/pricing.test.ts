@@ -103,6 +103,127 @@ describe("calculateUsage — missing metadata", () => {
   });
 });
 
+describe("calculateUsage — GA model IDs price at the verified rates", () => {
+  // makeMetadata() = 5 prompt tokens + 1290 image tokens, 0 text/thinking.
+  // Pin exact dollar figures so a wrong rate (e.g. a copy-paste of the flash rate
+  // onto the pro entry) fails the test instead of passing a generic $-shape match.
+  test("gemini-2.5-flash-image: $0.30/M in + $30/M image => $0.0387", () => {
+    expect(calculateUsage("gemini-2.5-flash-image", makeMetadata()).estimatedCost).toBe("$0.0387");
+  });
+
+  test("gemini-3-pro-image: $2.00/M in + $120/M image => $0.1548", () => {
+    expect(calculateUsage("gemini-3-pro-image", makeMetadata()).estimatedCost).toBe("$0.1548");
+  });
+
+  test("gemini-3.1-flash-image: $0.50/M in + $60/M image => $0.0774", () => {
+    expect(calculateUsage("gemini-3.1-flash-image", makeMetadata()).estimatedCost).toBe("$0.0774");
+  });
+
+  test("GA and -preview aliases price identically during the cutover", () => {
+    expect(calculateUsage("gemini-3.1-flash-image", makeMetadata()).estimatedCost).toBe(
+      calculateUsage("gemini-3.1-flash-image-preview", makeMetadata()).estimatedCost,
+    );
+    expect(calculateUsage("gemini-3-pro-image", makeMetadata()).estimatedCost).toBe(
+      calculateUsage("gemini-3-pro-image-preview", makeMetadata()).estimatedCost,
+    );
+  });
+});
+
+describe("calculateUsage — per-modality output rates (text/thinking priced below image)", () => {
+  // 10 prompt, 1000 image-output, 200 text-output, 100 thinking tokens. Exercises the
+  // text/thinking rates the image-only fixtures above never touch — this is the gap that
+  // let a flat (text==image) rate slip in for the 3.x models.
+  const mixed = () => ({
+    promptTokenCount: 10,
+    candidatesTokenCount: 1200,
+    candidatesTokensDetails: [
+      { modality: "IMAGE", tokenCount: 1000 },
+      { modality: "TEXT", tokenCount: 200 },
+    ],
+    thoughtsTokenCount: 100,
+    totalTokenCount: 1310,
+  });
+
+  test("gemini-2.5-flash-image: text/thinking $2.5/M, image $30/M => $0.0308", () => {
+    expect(calculateUsage("gemini-2.5-flash-image", mixed()).estimatedCost).toBe("$0.0308");
+  });
+
+  test("gemini-3-pro-image: text/thinking $12/M, image $120/M => $0.1236", () => {
+    expect(calculateUsage("gemini-3-pro-image", mixed()).estimatedCost).toBe("$0.1236");
+  });
+
+  test("gemini-3.1-flash-image: text/thinking $3/M, image $60/M => $0.0609", () => {
+    expect(calculateUsage("gemini-3.1-flash-image", mixed()).estimatedCost).toBe("$0.0609");
+  });
+});
+
+describe("calculateUsage — malformed pricing overrides never produce $NaN", () => {
+  // A NaN cost serializes to "$NaN", which parses to 0 cents and would silently
+  // defeat the maxCostPerHour cap. Malformed overrides must fall back, not crash.
+  const meta = makeMetadata();
+  const badCases: Record<string, unknown> = {
+    "string rate": { m: { inputPerMillion: "x", textOutputPerMillion: 1, imageOutputPerMillion: 1, thinkingPerMillion: 1 } },
+    "negative rate": { m: { inputPerMillion: -1, textOutputPerMillion: 1, imageOutputPerMillion: 1, thinkingPerMillion: 1 } },
+    "NaN rate": { m: { inputPerMillion: NaN, textOutputPerMillion: 1, imageOutputPerMillion: 1, thinkingPerMillion: 1 } },
+    "missing field": { m: { inputPerMillion: 1 } },
+    "non-object value": { m: "nope" },
+  };
+
+  for (const [label, overrides] of Object.entries(badCases)) {
+    test(`${label}: unknown model falls back to "unknown", never $NaN`, () => {
+      const result = calculateUsage("m", meta, overrides as never);
+      expect(result.estimatedCost).not.toContain("NaN");
+      expect(result.estimatedCost).toMatch(/^unknown/);
+    });
+  }
+
+  test("a malformed override for a KNOWN model falls back to built-in pricing", () => {
+    const good = calculateUsage("gemini-2.5-flash-image", meta);
+    const withBad = calculateUsage("gemini-2.5-flash-image", meta, {
+      "gemini-2.5-flash-image": { inputPerMillion: NaN, textOutputPerMillion: 1, imageOutputPerMillion: 1, thinkingPerMillion: 1 },
+    } as never);
+    expect(withBad.estimatedCost).toBe(good.estimatedCost);
+  });
+});
+
+describe("calculateUsage — pricing overrides", () => {
+  const override = {
+    "brand-new-model": {
+      inputPerMillion: 1,
+      textOutputPerMillion: 100,
+      imageOutputPerMillion: 100,
+      thinkingPerMillion: 100,
+    },
+  };
+
+  test("an override supplies a cost for a model not in the built-in table", () => {
+    const without = calculateUsage("brand-new-model", makeMetadata());
+    expect(without.estimatedCost).toMatch(/^unknown/);
+
+    const withOverride = calculateUsage("brand-new-model", makeMetadata(), override);
+    expect(withOverride.estimatedCost).toMatch(/^\$\d+\.\d{4}$/);
+  });
+
+  test("an override takes precedence over the built-in table", () => {
+    const builtin = calculateUsage("gemini-2.5-flash-image", makeMetadata());
+    const overridden = calculateUsage("gemini-2.5-flash-image", makeMetadata(), {
+      "gemini-2.5-flash-image": {
+        inputPerMillion: 999,
+        textOutputPerMillion: 999,
+        imageOutputPerMillion: 999,
+        thinkingPerMillion: 999,
+      },
+    });
+    expect(overridden.estimatedCost).not.toBe(builtin.estimatedCost);
+  });
+
+  test("an empty/undefined override leaves built-in pricing intact", () => {
+    const a = calculateUsage("gemini-2.5-flash-image", makeMetadata());
+    const b = calculateUsage("gemini-2.5-flash-image", makeMetadata(), {});
+    expect(a.estimatedCost).toBe(b.estimatedCost);
+  });
+});
+
 describe("PRICING_VERIFIED_DATE constant", () => {
   test("is a date-shaped string (YYYY-MM-DD)", () => {
     expect(PRICING_VERIFIED_DATE).toMatch(/^\d{4}-\d{2}-\d{2}$/);

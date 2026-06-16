@@ -5,8 +5,11 @@ dist/
 .mcp.json
 .claude/
 test-output/
-bun.lock
+scratch/
 nul
 mcp-publisher.exe
 docs/
 .mcpregistry_*
+
+# Private maintenance-agent brief — local only, never published
+/CLAUDE.md
