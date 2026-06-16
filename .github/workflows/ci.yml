@@ -27,7 +27,10 @@ jobs:
           bun-version: 1.3.9
 
       - name: Install dependencies
-        run: bun install --frozen-lockfile
+        # Non-frozen: bun's frozen check rejects a lockfile authored on a different
+        # OS. Determinism comes from the pinned bun version above + the committed
+        # lockfile (which bun prefers); the build/test job is the real drift gate.
+        run: bun install
 
       - name: Build (tsc)
         run: bun run build
