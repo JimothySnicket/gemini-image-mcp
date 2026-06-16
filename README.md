@@ -41,6 +41,7 @@ npx @jimothy-snicket/gemini-image-mcp --init --local
 ### generate_image — AI-powered
 - **Text-to-image** — describe what you want, get an image
 - **Image editing** — provide reference images and an editing instruction
+- **Transparent assets in one call** — `removeBackground` returns a clean transparent PNG: a local AI matte (works on any subject) by default, or green-screen / white-threshold keying. No extra API cost
 - **Multi-turn sessions** — iteratively refine images with conversation history
 - **Multi-image input** — up to ~14 reference images on gemini-3.1-flash-image (~11 on gemini-3-pro-image)
 - **Cost reporting** — every response includes token counts, estimated USD cost, and session totals
@@ -240,6 +241,7 @@ Models with no entry (built-in or override) still generate — their cost is rep
 | `sessionId` | No | Continue a multi-turn editing session from a previous response |
 | `seed` | No | Integer seed for reproducible generation |
 | `useSearchGrounding` | No | Enable Google Search grounding (gemini-3.x image models) |
+| `removeBackground` | No | Return a transparent PNG cutout. `{ "mode": "auto" }` = local AI matte (any subject; default); `{ "mode": "chroma" }` = green screen; `{ "mode": "threshold" }` = white removal (line art). No extra API cost |
 
 ### Example Response
 
@@ -289,6 +291,9 @@ Models with no entry (built-in or override) still generate — their cost is rep
 **High quality:**
 > "A photorealistic product shot of headphones on marble, 4K" (using gemini-3-pro-image)
 
+**Transparent asset (one call):**
+> "A glossy red sneaker, product shot" with `removeBackground: { "mode": "auto" }` → a ready-to-place transparent PNG. The local AI matte works on any subject — no green screen needed.
+
 ## Tool: `process_image`
 
 Local image processing via sharp. Free, fast, no API calls.
@@ -300,7 +305,7 @@ Local image processing via sharp. Free, fast, no API calls.
 | `imagePath` | Yes | Path to the image file to process |
 | `crop` | No | Crop by pixel dimensions, aspect ratio, or focal point strategy |
 | `resize` | No | Resize to width/height (maintains aspect ratio) |
-| `removeBackground` | No | Remove background by threshold (white) or chroma key (any solid colour) |
+| `removeBackground` | No | Remove background: `{ "mode": "auto" }` (AI matte, any subject), `{ "mode": "chroma" }` (green screen), or `{ "mode": "threshold" }` (white). Defaults to chroma if `color` set, else threshold |
 | `trim` | No | Auto-remove whitespace/transparent borders |
 | `format` | No | Convert to `png`, `jpeg`, or `webp` |
 | `quality` | No | Output quality for JPEG/WebP (1-100) |
@@ -327,19 +332,24 @@ Local image processing via sharp. Free, fast, no API calls.
 ### Background Removal Options
 
 ```json
+// AI semantic matte — best quality, works on ANY subject
+{"mode": "auto"}
+
 // White/light background (threshold)
-{"threshold": 240}
+{"mode": "threshold", "threshold": 240}
 
 // Green screen (chroma key)
-{"color": "#00FF00"}
+{"mode": "chroma", "color": "#00FF00"}
 
 // Any solid colour
-{"color": "#0000FF", "tolerance": 60}
+{"mode": "chroma", "color": "#0000FF", "tolerance": 60}
 ```
 
-Chroma key uses HSV colour space keying with smoothstep feathering, spill suppression (removes colour fringe on edge pixels), and 5-pass edge anti-aliasing. Default tolerance is 80. Always use `#00FF00` for AI-generated green screens — it works better than matching the exact shade Gemini produces.
+`mode: "auto"` runs a local BiRefNet matte (via `@huggingface/transformers`) that isolates the subject semantically — so it handles hair, glass, and green/yellow subjects that chroma key can't. The model downloads once on first use, then runs locally with no extra API cost; if it can't load, the response keeps the original image and points you to `chroma`/`threshold`.
 
-**Note:** Chroma key works best with high-contrast subjects (red, blue, black on green). For yellow, green, or glass/reflective subjects, use the canvas approach instead — feed a solid colour background image to `generate_image` and let Gemini place the subject with correct lighting.
+Chroma key (`mode: "chroma"`) uses HSV keying with smoothstep feathering, spill suppression, and 5-pass edge anti-aliasing (default tolerance 80). Use `#00FF00` for AI-generated green screens — it works better than matching the exact shade Gemini produces.
+
+**Note:** Chroma key destroys subjects that share the key colour (green/yellow) and transparent/reflective subjects (glass) — the green parrot vanishes. For those, use `mode: "auto"` (the AI matte preserves them), or the canvas approach: feed a solid-colour background image to `generate_image` and let Gemini place the subject with correct lighting. The canvas approach is still best for truly transparent objects like glass, which should transmit the *final* background rather than be cut out.
 
 ### Common Pipelines
 
@@ -349,12 +359,18 @@ generate_image → "Place a [subject] on this background" with images: [solid co
 ```
 One API call. Best for yellow, green, or glass subjects where chroma key struggles.
 
-**Transparent asset from green screen:**
+**Transparent asset (one call):**
+```
+generate_image → "A product photo of <subject>" with removeBackground: {mode: "auto"}
+```
+One API call → a transparent PNG. The local AI matte works on any subject. (For truly transparent/reflective objects like glass, the canvas approach above is still best.)
+
+**Transparent asset from green screen (zero-dependency):**
 ```
 generate_image → "A product photo on a bright green background"
-process_image → removeBackground {color: "#00FF00"} + trim
+process_image → removeBackground {mode: "chroma"} + trim
 ```
-Two tool calls, zero cost for the processing step. Best for high-contrast subjects.
+Avoids the matte model entirely — best for high-contrast subjects on locked-down/offline machines.
 
 **Favicon from a generated logo:**
 ```

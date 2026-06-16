@@ -2,6 +2,21 @@
 
 All notable changes to this project.
 
+## [Unreleased]
+
+### Added
+- **One-call transparent assets** — `generate_image` accepts `removeBackground` to return a transparent PNG in a single call. Default `{ "mode": "auto" }` runs a local AI semantic matte (BiRefNet via `@huggingface/transformers`, MIT model, pinned revision) that works on any subject — including green/yellow and glass/reflective subjects that chroma key can't handle — at no extra API cost (the model downloads once on first use, then runs locally). `{ "mode": "chroma" }` (green screen) and `{ "mode": "threshold" }` (white, for line art) reuse the existing zero-dependency sharp pipeline. If background removal is requested but the matte model can't load, the original image is still saved with a warning (a paid generation is never discarded).
+- `process_image` gains `removeBackground` `mode: "auto"` (AI matte) alongside chroma/threshold, so any existing image can be matted.
+- Config: `defaults.generate.removeBackground` for per-project defaults (parity with `defaults.process.removeBackground`).
+
+### Changed
+- Background-removal logic factored into a shared `background.ts` module used by both tools (chroma/threshold output is unchanged).
+- When `process_image` removes a background, the output now defaults to PNG (alpha-capable) instead of the input format, so a JPEG input no longer silently flattens the transparency.
+- `removeBackground.color` is hex-validated on both tools.
+
+### Notes
+- New dependency `@huggingface/transformers` (Apache-2.0). The matte runs on the bundled native onnxruntime CPU binding by default, with a WASM fallback for platforms without a prebuilt binary. Background removal is opt-in, so users who only generate images don't trigger the model download.
+
 ## [0.4.1] - 2026-06-15
 
 ### Fixed
