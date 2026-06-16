@@ -6,7 +6,6 @@ dist/
 .claude/
 test-output/
 scratch/
-bun.lock
 nul
 mcp-publisher.exe
 docs/
