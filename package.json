@@ -54,7 +54,7 @@
     "@google/genai": "^2.8.0",
     "@modelcontextprotocol/sdk": "^1.22.0",
     "sharp": "^0.34.5",
-    "zod": "3.25.76"
+    "zod": "4.4.3"
   },
   "peerDependencies": {
     "@huggingface/transformers": "^4.2.0"
@@ -70,6 +70,6 @@
     "typescript": "^6.0.3"
   },
   "overrides": {
-    "zod": "3.25.76"
+    "zod": "4.4.3"
   }
 }
