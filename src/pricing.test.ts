@@ -50,16 +50,15 @@ describe("calculateUsage — known model", () => {
     expect(result.pricingVerifiedDate).toBe(PRICING_VERIFIED_DATE);
   });
 
-  test("gemini-3-pro-image-preview returns a valid cost", () => {
-    const result = calculateUsage("gemini-3-pro-image-preview", makeMetadata());
+  test("gemini-3.1-flash-lite-image returns a valid cost", () => {
+    const result = calculateUsage("gemini-3.1-flash-lite-image", makeMetadata());
     expect(result.estimatedCost).toMatch(/^\$\d+\.\d{4}$/);
     expect(result.pricingVerifiedDate).toBe(PRICING_VERIFIED_DATE);
   });
 
-  test("gemini-3.1-flash-image-preview returns a valid cost", () => {
-    const result = calculateUsage("gemini-3.1-flash-image-preview", makeMetadata());
-    expect(result.estimatedCost).toMatch(/^\$\d+\.\d{4}$/);
-    expect(result.pricingVerifiedDate).toBe(PRICING_VERIFIED_DATE);
+  test("retired -preview IDs fall back to 'unknown', not a stale cost", () => {
+    expect(calculateUsage("gemini-3.1-flash-image-preview", makeMetadata()).estimatedCost).toMatch(/^unknown/);
+    expect(calculateUsage("gemini-3-pro-image-preview", makeMetadata()).estimatedCost).toMatch(/^unknown/);
   });
 });
 
@@ -119,13 +118,8 @@ describe("calculateUsage — GA model IDs price at the verified rates", () => {
     expect(calculateUsage("gemini-3.1-flash-image", makeMetadata()).estimatedCost).toBe("$0.0774");
   });
 
-  test("GA and -preview aliases price identically during the cutover", () => {
-    expect(calculateUsage("gemini-3.1-flash-image", makeMetadata()).estimatedCost).toBe(
-      calculateUsage("gemini-3.1-flash-image-preview", makeMetadata()).estimatedCost,
-    );
-    expect(calculateUsage("gemini-3-pro-image", makeMetadata()).estimatedCost).toBe(
-      calculateUsage("gemini-3-pro-image-preview", makeMetadata()).estimatedCost,
-    );
+  test("gemini-3.1-flash-lite-image: $0.25/M in + $30/M image => $0.0387", () => {
+    expect(calculateUsage("gemini-3.1-flash-lite-image", makeMetadata()).estimatedCost).toBe("$0.0387");
   });
 });
 
@@ -150,6 +144,10 @@ describe("calculateUsage — per-modality output rates (text/thinking priced bel
 
   test("gemini-3-pro-image: text/thinking $12/M, image $120/M => $0.1236", () => {
     expect(calculateUsage("gemini-3-pro-image", mixed()).estimatedCost).toBe("$0.1236");
+  });
+
+  test("gemini-3.1-flash-lite-image: text/thinking $1.5/M, image $30/M => $0.0305", () => {
+    expect(calculateUsage("gemini-3.1-flash-lite-image", mixed()).estimatedCost).toBe("$0.0305");
   });
 
   test("gemini-3.1-flash-image: text/thinking $3/M, image $60/M => $0.0609", () => {

@@ -68,7 +68,9 @@ npx @jimothy-snicket/gemini-image-mcp --init --local
 
 ### 1. Get a Gemini API Key
 
-Go to [Google AI Studio](https://aistudio.google.com/apikey) and create an API key. It's free to start with generous rate limits.
+Go to [Google AI Studio](https://aistudio.google.com/apikey) and create an API key.
+
+> **Billing required:** image generation has **no free tier** — free-tier keys get `429 RESOURCE_EXHAUSTED` (quota limit 0) on every image model. Enable pay-as-you-go billing on the key's Google Cloud project ([usage & billing](https://ai.dev/rate-limit)). Images cost ~$0.03–$0.24 each depending on model and resolution; the cheapest model (`gemini-3.1-flash-lite-image`, the default) is ~$0.034 per image.
 
 ### 2. Set the API Key
 
@@ -164,7 +166,7 @@ All optional. The only required setup is `GEMINI_API_KEY` (covered above).
 | Variable | Default | Description |
 |----------|---------|-------------|
 | `OUTPUT_DIR` | `~/gemini-images` | Default directory for saved images |
-| `DEFAULT_MODEL` | `gemini-2.5-flash-image` | Default Gemini model |
+| `DEFAULT_MODEL` | `gemini-3.1-flash-lite-image` | Default Gemini model |
 | `LOG_LEVEL` | `info` | `debug`, `info`, or `error` |
 | `REQUEST_TIMEOUT_MS` | `60000` | API request timeout in milliseconds |
 | `MAX_REQUESTS_PER_HOUR` | `0` (unlimited) | Max image generations per rolling hour |
@@ -250,7 +252,7 @@ Models with no entry (built-in or override) still generate — their cost is rep
 {
   "imagePath": "/home/user/gemini-images/hero-banner.png",
   "mimeType": "image/png",
-  "model": "gemini-2.5-flash-image",
+  "model": "gemini-3.1-flash-lite-image",
   "sessionId": "session-1711929600000-a1b2c3",
   "sessionTurn": 1,
   "usage": {
@@ -260,7 +262,7 @@ Models with no entry (built-in or override) still generate — their cost is rep
     "thinkingTokens": 412,
     "totalTokens": 1712,
     "estimatedCost": "$0.0390",
-    "pricingVerifiedDate": "2026-06-15"
+    "pricingVerifiedDate": "2026-09-16"
   },
   "session": {
     "generationsThisSession": 3,
@@ -392,11 +394,12 @@ process_image → format: "webp" + quality: 85
 
 | Model | Strengths | Resolution | Notes |
 |-------|-----------|------------|-------|
-| `gemini-2.5-flash-image` | Cheapest (~$0.04/image) | 1K | Default. Shuts down 2026-10-02 |
+| `gemini-3.1-flash-lite-image` | Cheapest (~$0.034/image) | 1K | **Default** (Nano Banana 2 Lite) |
 | `gemini-3.1-flash-image` | Speed + quality, Google Search grounding | 512, 1K, 2K, 4K | ~$0.07/1K image. ~14 reference images |
 | `gemini-3-pro-image` | Best quality, text rendering | 1K, 2K, 4K | ~$0.13/1K image. ~11 reference images |
+| `gemini-2.5-flash-image` | Legacy | 1K | Shuts down 2026-10-02 |
 
-The `-preview` IDs (`gemini-3-pro-image-preview`, `gemini-3.1-flash-image-preview`) are still accepted during Google's cutover but **retire 2026-06-25** — use the GA IDs above. The server discovers whichever image models your API key supports at startup and validates each request against that live list, so new models work without an update.
+The retired `-preview` IDs (`gemini-3-pro-image-preview`, `gemini-3.1-flash-image-preview`) may still appear in your key's model list but were retired 2026-06-25 — use the GA IDs above. The server discovers whichever image models your API key supports at startup and validates each request against that live list, so new models work without an update.
 
 ## Development
 

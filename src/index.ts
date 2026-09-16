@@ -54,10 +54,10 @@ server.registerTool(
       model: z
         .optional(z.string())
         .describe(
-          "Gemini image model ID. Defaults to the configured default (gemini-2.5-flash-image). " +
+          "Gemini image model ID. Defaults to the configured default (gemini-3.1-flash-lite-image). " +
             "Validated at request time against the models your API key supports (discovered at startup). " +
-            "Common: gemini-3.1-flash-image (fast, grounding, 512-4K), gemini-3-pro-image (best quality, up to 4K), " +
-            "gemini-2.5-flash-image (cheapest, 1K; shuts down 2026-10-02).",
+            "Common: gemini-3.1-flash-lite-image (cheapest, 1K), gemini-3.1-flash-image (fast, grounding, 512-4K), " +
+            "gemini-3-pro-image (best quality, up to 4K), gemini-2.5-flash-image (legacy, 1K; shuts down 2026-10-02).",
         ),
       aspectRatio: z
         .optional(z.string())
@@ -68,7 +68,7 @@ server.registerTool(
         ),
       resolution: z
         .optional(z.enum(["512", "1K", "2K", "4K"]))
-        .describe("Image resolution. Defaults to config value or 1K. 512 only on gemini-3.1-flash-image; 1K/2K/4K on gemini-3.x image models; gemini-2.5-flash-image is 1K."),
+        .describe("Image resolution. Defaults to config value or 1K. 512 only on gemini-3.1-flash-image; 2K/4K on gemini-3.1-flash-image and gemini-3-pro-image; gemini-3.1-flash-lite-image and gemini-2.5-flash-image are 1K."),
       outputDir: z
         .optional(z.string())
         .describe(

@@ -2,6 +2,17 @@
 
 All notable changes to this project.
 
+## [0.5.1] - 2026-09-16
+
+### Changed
+- **Default model is now `gemini-3.1-flash-lite-image`** (Nano Banana 2 Lite) — the new cheapest GA tier (~$0.034 per 1K image, 1K output). The previous default, `gemini-2.5-flash-image`, shuts down 2026-10-02; it remains selectable until then. Existing configs that set `defaultModel` explicitly are unaffected.
+- Pricing table: added `gemini-3.1-flash-lite-image` ($0.25/M input, $1.50/M text+thinking, $30/M image output); removed the retired `-preview` aliases (they fell out of Google's rotation 2026-06-25 and now report cost as "unknown" rather than a stale figure); re-verified all rates against the live pricing page (`PRICING_VERIFIED_DATE` 2026-09-16).
+- Tool descriptions and the config template now list the Lite model and its 1K-only resolution.
+
+### Notes
+- **Billing is required.** Free-tier API keys get `429 RESOURCE_EXHAUSTED` (quota limit 0) on every image model — this is now called out in the README's setup section.
+- Verified live 2026-09-16: generation on `gemini-3.1-flash-lite-image` (1K) and `gemini-3.1-flash-image` (512 + search grounding) through the server's own request path, and a one-call transparent-asset generation (`gemini-2.5-flash-image` + `auto` matte).
+
 ## [0.5.0] - 2026-06-16
 
 ### Added

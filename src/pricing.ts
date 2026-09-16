@@ -11,21 +11,27 @@ export interface ModelPricing {
 // official Gemini API pricing page. Surfaced in every UsageReport so callers can
 // assess staleness. (There is no pricing API — these rates are maintained by hand;
 // run `npm run check:pricing` to re-verify against the live docs.)
-export const PRICING_VERIFIED_DATE = "2026-06-15";
+export const PRICING_VERIFIED_DATE = "2026-09-16";
 
 // Per-1M-token rates (USD). The estimated cost is computed from the live token
 // counts the API returns, so per-image cost auto-adjusts with resolution; only
 // these rates are static. Unknown models fall back to "unknown" (see below) or a
 // caller-supplied pricingOverrides entry, so a brand-new model still works.
 export const PRICING: Record<string, ModelPricing> = {
+  // Cheapest tier (Nano Banana 2 Lite), GA 2026 — 1K output only (~$0.034/1K image).
+  "gemini-3.1-flash-lite-image": {
+    inputPerMillion: 0.25,
+    textOutputPerMillion: 1.5,
+    imageOutputPerMillion: 30.0,
+    thinkingPerMillion: 1.5,
+  },
+  // Legacy cheapest — shuts down 2026-10-02. Entry stays until the model is gone.
   "gemini-2.5-flash-image": {
     inputPerMillion: 0.3,
     textOutputPerMillion: 2.5,
     imageOutputPerMillion: 30.0,
     thinkingPerMillion: 2.5,
   },
-  // GA since ~2026-05-28. The `-preview` aliases below retire 2026-06-25; both are
-  // kept during the cutover so in-flight callers keep getting accurate costs.
   // NOTE: text/thinking output is priced well below image output (3-pro $12 vs $120/M;
   // 3.1-flash $3 vs $60/M) — keep these per-modality rates distinct, not flat.
   "gemini-3-pro-image": {
@@ -34,19 +40,7 @@ export const PRICING: Record<string, ModelPricing> = {
     imageOutputPerMillion: 120.0,
     thinkingPerMillion: 12.0,
   },
-  "gemini-3-pro-image-preview": {
-    inputPerMillion: 2.0,
-    textOutputPerMillion: 12.0,
-    imageOutputPerMillion: 120.0,
-    thinkingPerMillion: 12.0,
-  },
   "gemini-3.1-flash-image": {
-    inputPerMillion: 0.5,
-    textOutputPerMillion: 3.0,
-    imageOutputPerMillion: 60.0,
-    thinkingPerMillion: 3.0,
-  },
-  "gemini-3.1-flash-image-preview": {
     inputPerMillion: 0.5,
     textOutputPerMillion: 3.0,
     imageOutputPerMillion: 60.0,

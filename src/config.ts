@@ -166,7 +166,7 @@ export function deepMerge<T extends Record<string, unknown>>(
 
 export const DEFAULTS: GeminiImageConfig = {
   outputDir: "~/gemini-images",
-  defaultModel: "gemini-2.5-flash-image",
+  defaultModel: "gemini-3.1-flash-lite-image",
   logLevel: "info",
   requestTimeout: 60000,
   sessionTimeout: 1800000,
@@ -343,10 +343,11 @@ export const CONFIG_TEMPLATE = `{
   "outputDir": "~/gemini-images",
 
   // Default Gemini model for image generation
-  // gemini-2.5-flash-image    — cheapest (~$0.04/image), 1K, shuts down 2026-10-02
-  // gemini-3.1-flash-image    — fast + Google Search grounding, 512-4K (~$0.07/1K image)
-  // gemini-3-pro-image        — best quality, up to 4K, ~11 ref images (~$0.13/1K image)
-  "defaultModel": "gemini-2.5-flash-image",
+  // gemini-3.1-flash-lite-image — cheapest (~$0.034/image), 1K
+  // gemini-3.1-flash-image      — fast + Google Search grounding, 512-4K (~$0.07/1K image)
+  // gemini-3-pro-image          — best quality, up to 4K, ~11 ref images (~$0.13/1K image)
+  // gemini-2.5-flash-image      — legacy, 1K, shuts down 2026-10-02
+  "defaultModel": "gemini-3.1-flash-lite-image",
 
   // Log level: "debug", "info", or "error"
   "logLevel": "info",
@@ -366,7 +367,8 @@ export const CONFIG_TEMPLATE = `{
     "generate": {
       // "aspectRatio": "1:1",
       // "resolution": "1K",
-      // Resolution: 512 (gemini-3.1-flash only), 1K, 2K, 4K (gemini-3.x); gemini-2.5-flash is 1K
+      // Resolution: 512 (gemini-3.1-flash only), 1K, 2K, 4K (gemini-3.1-flash / 3-pro);
+      // gemini-3.1-flash-lite and gemini-2.5-flash are 1K only
       // Always return a transparent cutout (opt-in). 'auto' = local AI matte, any subject:
       // "removeBackground": { "mode": "auto" }
     },
