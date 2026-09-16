@@ -7,11 +7,24 @@ import type { RemoveBgOptions } from "./background.js";
 
 // ── Types ───────────────────────────────────────────────────────────
 
+// Single source for the closed option sets shared by the zod schema (index.ts),
+// request params (generate.ts), and config defaults below — declared here so the
+// three sites can't drift. New API-side values still work per-request only after
+// being added here (deliberate: these are closed enums the client contract names,
+// unlike aspectRatio which is a free, API-validated string).
+export const GROUNDING_MODES = ["web", "web+image"] as const;
+export type GroundingMode = (typeof GROUNDING_MODES)[number];
+export const THINKING_LEVELS = ["MINIMAL", "HIGH"] as const;
+export type ThinkingLevel = (typeof THINKING_LEVELS)[number];
+
 export interface GenerateDefaults {
   aspectRatio?: string;
   resolution?: string;
-  thinkingLevel?: "MINIMAL" | "HIGH";
+  thinkingLevel?: ThinkingLevel;
   removeBackground?: RemoveBgOptions;
+  // NB: no `grounding` default by design — grounding spends money per request and
+  // its results carry a ToS display obligation, so it stays an explicit
+  // per-request choice rather than something a config file can silently enable.
 }
 
 export interface ProcessDefaults {

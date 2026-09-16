@@ -416,7 +416,8 @@ The model **watches your video and synthesizes a new image from what it understo
 
 - Supported on the **gemini-3.1-flash family** (`gemini-3.1-flash-image`, `gemini-3.1-flash-lite-image`); other models reject it.
 - Accepts local files (`mp4`, `mov`, `webm`, `avi`, `mpeg`, `wmv`, `flv`, `3gpp`), max 500MB each, up to 3 per call. Each video is uploaded to Google's Files API, polled until processed, used for the call, then deleted. Video tokens count as input (a 2s clip ≈ 140 tokens).
-- **Not combinable with `sessionId`** — sessions are text+image only.
+- **Not combinable with `sessionId`** — sessions are text+image only, and video turns don't create sessions (the upload is deleted after the call, so a stored session would replay a dead reference).
+- Upload + server-side processing happen before the generation call and are bounded by a 120s-per-video processing cap, not by `REQUEST_TIMEOUT_MS` (which only bounds the generation call itself).
 - You must have the necessary rights to any video you upload.
 - Scope note: this is video **input**. Video *generation* is a different model family (Google's Veo, accessed via its own API) and is out of this server's scope.
 
@@ -442,7 +443,7 @@ Not supported on `gemini-3.1-flash-lite-image` (the API rejects grounding there)
 
 | Model | Strengths | Resolution | Notes |
 |-------|-----------|------------|-------|
-| `gemini-3.1-flash-lite-image` | Cheapest (~$0.034/image) | 1K | **Default** (Nano Banana 2 Lite). No search grounding; up to 14 reference images but not optimized for multi-image or multi-turn editing — prefer 3.1-flash for those |
+| `gemini-3.1-flash-lite-image` | Cheapest (~$0.034/image), video input | 1K | **Default** (Nano Banana 2 Lite). No search grounding; up to 14 reference images but not optimized for multi-image or multi-turn editing — prefer 3.1-flash for those |
 | `gemini-3.1-flash-image` | Speed + quality, search grounding (web + image), video input | 512, 1K, 2K, 4K | ~$0.07/1K image. Up to 10 object + 4 character + 3 style reference images |
 | `gemini-3-pro-image` | Best quality, text rendering | 1K, 2K, 4K | ~$0.13/1K image. Up to 6 object + 5 character reference images |
 | `gemini-2.5-flash-image` | Legacy | 1K | Shuts down 2026-10-02 |
