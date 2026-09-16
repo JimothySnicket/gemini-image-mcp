@@ -1,4 +1,4 @@
-import sharp from "sharp";
+import sharp, { type Sharp } from "sharp";
 import { createRequire } from "node:module";
 import { execFile } from "node:child_process";
 import { existsSync, mkdirSync, writeFileSync } from "node:fs";
@@ -403,7 +403,7 @@ export async function matteToPng(inputBuffer: Buffer): Promise<Buffer> {
   // The background-removal pipeline returns a single RawImage (RGBA) for a single input.
   const result = await (segmenter as (img: unknown) => Promise<unknown>)(image);
   const out = Array.isArray(result) ? result[0] : result;
-  return (out as { toSharp(): sharp.Sharp }).toSharp().png().toBuffer();
+  return (out as { toSharp(): Sharp }).toSharp().png().toBuffer();
 }
 
 /**
