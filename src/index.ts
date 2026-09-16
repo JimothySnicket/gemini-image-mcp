@@ -55,8 +55,9 @@ server.registerTool(
       videos: z
         .optional(z.array(z.string()).max(3))
         .describe(
-          "File paths to input videos (mp4/mov/webm/etc, max 500MB each) for video-to-image: thumbnails, posters, " +
-            "summary frames. Uploaded via the Files API per call. gemini-3.1-flash family only; not combinable with sessionId.",
+          "File paths to input videos (mp4/mov/webm/etc, max 500MB each). The model watches the video and " +
+            "creates a NEW image from what it understood — thumbnails, posters, summary art. Not a frame grabber. " +
+            "gemini-3.1-flash family only; not combinable with sessionId.",
         ),
       model: z
         .optional(z.string())

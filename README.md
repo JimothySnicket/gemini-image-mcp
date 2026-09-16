@@ -399,7 +399,12 @@ These are opt-in knobs on `generate_image`. Most requests don't need them — th
 
 ### Video-to-image (`videos`)
 
-Generate an image *from* a video: thumbnails, movie posters, summary frames, infographics.
+The model **watches your video and synthesizes a new image from what it understood** — the subject, mood, colors, and action — rather than copying a frame. If you just want a frame, use ffmpeg; this is for images that require *understanding* the footage:
+
+- **YouTube thumbnails** — "watch my video and make a click-worthy thumbnail" (the headline use case: no scrubbing for a non-blurry frame)
+- **Posters and cover art** — gameplay footage → key art, a gig recording → gig poster, a product demo → a clean product shot
+- **Summary infographics** — "diagram the key steps from this tutorial video"
+- **Style-transferred stills** — a pencil-sketch of a dance video, a comic panel from home footage
 
 ```json
 {
@@ -413,6 +418,7 @@ Generate an image *from* a video: thumbnails, movie posters, summary frames, inf
 - Accepts local files (`mp4`, `mov`, `webm`, `avi`, `mpeg`, `wmv`, `flv`, `3gpp`), max 500MB each, up to 3 per call. Each video is uploaded to Google's Files API, polled until processed, used for the call, then deleted. Video tokens count as input (a 2s clip ≈ 140 tokens).
 - **Not combinable with `sessionId`** — sessions are text+image only.
 - You must have the necessary rights to any video you upload.
+- Scope note: this is video **input**. Video *generation* is a different model family (Google's Veo, accessed via its own API) and is out of this server's scope.
 
 ### Thinking depth (`thinkingLevel`)
 

@@ -155,7 +155,7 @@ Use the GA IDs above; the `-preview` IDs retired 2026-06-25. The server validate
 
 Use these only when the task calls for them:
 
-- **Video-to-image** (`videos: ["./clip.mp4"]`) — thumbnails, posters, or summary frames from a video. gemini-3.1-flash family only; not with `sessionId`. Only with videos the user has rights to.
+- **Video-to-image** (`videos: ["./clip.mp4"]`) — the model watches the video and creates a NEW image from what it understood (not a frame grab): YouTube thumbnails, posters from footage, summary infographics of tutorials, style-transferred stills. gemini-3.1-flash family only; not with `sessionId`. Only with videos the user has rights to.
 - **Thinking depth** (`thinkingLevel: "HIGH"`) — for infographics, diagrams, menus, or dense typography where the render depends on reasoning. Default MINIMAL is fine for everything else (and cheaper).
 - **Search grounding** (`grounding`) — `"web"` for current facts (weather, charts, news); `"web+image"` (3.1-flash only) for mood boards and visual trend references. When a response includes a `grounding` object, show the user its sources — and display `searchEntryPointHtml` when presenting grounded results (Google ToS requirement). Not supported on the default Lite model — switch to `gemini-3.1-flash-image`.
 
