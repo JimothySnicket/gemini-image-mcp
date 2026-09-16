@@ -2,6 +2,21 @@
 
 All notable changes to this project.
 
+## [0.6.1] - 2026-09-16
+
+### Fixed
+- **Video turns no longer create sessions.** A video-to-image call auto-created a session whose stored history referenced the uploaded Files API URIs — which were then deleted after the call, so continuing the returned `sessionId` replayed a dead reference and failed at the API. Video turns are now one-shot (no session created), matching the documented "not combinable with `sessionId`" design.
+- **Uploaded videos can no longer leak in Files API storage.** Uploads now run inside an acquire/release helper (`withUploadedVideos`): every successful upload is deleted — awaited — on any outcome, and a video whose processing FAILs or times out deletes its own file (with the API's failure reason in the error) before throwing. Previously, a later video failing validation left earlier uploads orphaned, and cleanup deletes were fire-and-forget.
+- **Image-search grounding chunks are no longer dropped.** `grounding` responses now map both the web and image-search chunk variants, so `web+image` mode surfaces its image sources (previously only `web`-shaped chunks were read).
+- README Models table now correctly lists video input for `gemini-3.1-flash-lite-image`, and the Advanced Features section documents the upload-phase timeout behavior.
+
+### Changed
+- Video uploads and input-image reads run in parallel instead of sequentially.
+- The deprecated `useSearchGrounding` boolean is normalized to `grounding: "web"` once at the tool boundary; internal request code sees a single `grounding` field.
+- `GROUNDING_MODES` / `THINKING_LEVELS` are now shared constants used by the tool schema, request types, and config defaults (single source, no drift); a comment records why `grounding` deliberately has no config-file default.
+- Video file validation shares its prologue with image validation, and uploads use the SDK's `File` type instead of a hand-rolled interface.
+- New offline tests cover the upload/cleanup lifecycle and grounding extraction (135 total).
+
 ## [0.6.0] - 2026-09-16
 
 ### Added

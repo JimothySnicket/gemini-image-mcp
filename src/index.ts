@@ -5,7 +5,7 @@ import { z } from "zod/v4";
 import { createRequire } from "module";
 import { discoverModels, generateImage } from "./generate.js";
 import { processImage } from "./process.js";
-import { loadConfig, initConfig } from "./config.js";
+import { loadConfig, initConfig, GROUNDING_MODES, THINKING_LEVELS } from "./config.js";
 import { initTracker } from "./tracker.js";
 import { log, setLogLevel, setLogDir } from "./utils.js";
 
@@ -108,14 +108,14 @@ server.registerTool(
           "Legacy alias for grounding: 'web'. Prefer the grounding parameter.",
         ),
       grounding: z
-        .optional(z.enum(["web", "web+image"]))
+        .optional(z.enum(GROUNDING_MODES))
         .describe(
           "Search grounding. 'web' = Google Search for real-world accuracy. 'web+image' adds image results " +
             "(gemini-3.1-flash-image only; response includes searchEntryPointHtml which ToS requires displaying). " +
             "Not supported on gemini-3.1-flash-lite-image.",
         ),
       thinkingLevel: z
-        .optional(z.enum(["MINIMAL", "HIGH"]))
+        .optional(z.enum(THINKING_LEVELS))
         .describe(
           "Thinking depth (gemini-3.1-flash family). Default MINIMAL = fast/cheap. Use HIGH for text-heavy " +
             "or diagram/infographic renders.",
@@ -165,8 +165,9 @@ server.registerTool(
         subfolder: args.subfolder,
         sessionId: args.sessionId,
         seed: args.seed,
-        useSearchGrounding: args.useSearchGrounding,
-        grounding: args.grounding,
+        // The deprecated useSearchGrounding boolean is normalized to the canonical
+        // grounding field here at the boundary; internal code sees one field only.
+        grounding: args.grounding ?? (args.useSearchGrounding ? "web" : undefined),
         thinkingLevel: args.thinkingLevel ?? config.defaults.generate.thinkingLevel,
         removeBackground: args.removeBackground ?? config.defaults.generate.removeBackground,
       });

@@ -1,5 +1,9 @@
-import { describe, test, expect } from "bun:test";
-import { isUsableImageModel, buildGenerateConfig } from "./generate.js";
+import { describe, test, expect, afterAll } from "bun:test";
+import { mkdirSync, writeFileSync, rmSync } from "fs";
+import { tmpdir } from "os";
+import { join } from "path";
+import type { GoogleGenAI } from "@google/genai";
+import { isUsableImageModel, buildGenerateConfig, withUploadedVideos, extractGroundingInfo } from "./generate.js";
 
 // Tests for the model-discovery filter. isUsableImageModel is a pure function over
 // the shape the live API returns ({ name, supportedActions }), so no API calls are
@@ -95,11 +99,6 @@ describe("buildGenerateConfig", () => {
     expect(c.responseModalities).toEqual(["TEXT", "IMAGE"]);
   });
 
-  test("useSearchGrounding attaches the googleSearch tool", () => {
-    const c = buildGenerateConfig({ useSearchGrounding: true }, { needsTextMode: false });
-    expect(c.tools).toEqual([{ googleSearch: {} }]);
-  });
-
   test("grounding 'web' attaches the plain googleSearch tool", () => {
     const c = buildGenerateConfig({ grounding: "web" }, { needsTextMode: false });
     expect(c.tools).toEqual([{ googleSearch: {} }]);
@@ -107,11 +106,6 @@ describe("buildGenerateConfig", () => {
 
   test("grounding 'web+image' enables image + web search types", () => {
     const c = buildGenerateConfig({ grounding: "web+image" }, { needsTextMode: false });
-    expect(c.tools).toEqual([{ googleSearch: { searchTypes: { imageSearch: {}, webSearch: {} } } }]);
-  });
-
-  test("explicit grounding wins over the deprecated boolean", () => {
-    const c = buildGenerateConfig({ grounding: "web+image", useSearchGrounding: false }, { needsTextMode: false });
     expect(c.tools).toEqual([{ googleSearch: { searchTypes: { imageSearch: {}, webSearch: {} } } }]);
   });
 
@@ -124,11 +118,6 @@ describe("buildGenerateConfig", () => {
     ).toBeUndefined();
   });
 
-  test("no grounding => no tools key", () => {
-    expect(buildGenerateConfig({ useSearchGrounding: false }, { needsTextMode: false }).tools).toBeUndefined();
-    expect(buildGenerateConfig({}, { needsTextMode: false }).tools).toBeUndefined();
-  });
-
   test("aspectRatio and resolution map into imageConfig (resolution -> imageSize)", () => {
     const c = buildGenerateConfig({ aspectRatio: "4:5", resolution: "512" }, { needsTextMode: false });
     expect(c.imageConfig).toEqual({ aspectRatio: "4:5", imageSize: "512" });
@@ -136,5 +125,118 @@ describe("buildGenerateConfig", () => {
 
   test("seed passes through", () => {
     expect(buildGenerateConfig({ seed: 42 }, { needsTextMode: false }).seed).toBe(42);
+  });
+});
+
+// ── withUploadedVideos: upload lifecycle + cleanup ordering ──────────
+// Offline coverage for the review findings: every successful upload must be
+// deleted (awaited) on EVERY outcome, and a FAILED file must delete itself
+// before the error propagates. The stub client records deletes as they happen.
+
+describe("withUploadedVideos", () => {
+  const dir = join(tmpdir(), `gim-vid-${process.pid}`);
+  mkdirSync(dir, { recursive: true });
+  const clipA = join(dir, "a.mp4");
+  const clipB = join(dir, "b.mp4");
+  writeFileSync(clipA, Buffer.from("fake-video-a"));
+  writeFileSync(clipB, Buffer.from("fake-video-b"));
+  afterAll(() => rmSync(dir, { recursive: true, force: true }));
+
+  function makeStub(getBehavior?: (name: string) => object) {
+    const deleted: string[] = [];
+    let uploads = 0;
+    const ai = {
+      files: {
+        upload: async () => {
+          uploads++;
+          return { name: `files/v${uploads}`, state: "PROCESSING", uri: `gs://v${uploads}`, mimeType: "video/mp4" };
+        },
+        get: async ({ name }: { name: string }) =>
+          getBehavior?.(name) ?? { name, state: "ACTIVE", uri: name.replace("files/", "gs://"), mimeType: "video/mp4" },
+        delete: async ({ name }: { name: string }) => {
+          deleted.push(name);
+        },
+      },
+    } as unknown as GoogleGenAI;
+    return { ai, deleted };
+  }
+
+  test("success: fn gets the ACTIVE files and every upload is deleted before resolve", async () => {
+    const { ai, deleted } = makeStub();
+    let filesSeen = 0;
+    await withUploadedVideos(ai, [clipA, clipB], async (files) => {
+      filesSeen = files.length;
+      // deletes must NOT have happened yet — files are still in use
+      expect(deleted).toEqual([]);
+    });
+    expect(filesSeen).toBe(2);
+    expect(deleted.sort()).toEqual(["files/v1", "files/v2"]);
+  });
+
+  test("a FAILED video deletes itself with the API's reason, and the successful upload is still cleaned up", async () => {
+    const { ai, deleted } = makeStub((name) =>
+      name === "files/v2"
+        ? { name, state: "FAILED", error: { message: "codec not supported" } }
+        : { name, state: "ACTIVE", uri: name.replace("files/", "gs://"), mimeType: "video/mp4" },
+    );
+    let message = "";
+    try {
+      await withUploadedVideos(ai, [clipA, clipB], async () => {});
+    } catch (err) {
+      message = err instanceof Error ? err.message : String(err);
+    }
+    expect(message).toContain("codec not supported");
+    expect(deleted.sort()).toEqual(["files/v1", "files/v2"]);
+  }, 15000);
+
+  test("fn throwing still deletes every upload, awaited", async () => {
+    const { ai, deleted } = makeStub();
+    await expect(
+      withUploadedVideos(ai, [clipA], async () => {
+        throw new Error("boom");
+      }),
+    ).rejects.toThrow("boom");
+    expect(deleted).toEqual(["files/v1"]);
+  });
+
+  test("validation failure before any upload leaves nothing to delete", async () => {
+    const { ai, deleted } = makeStub();
+    await expect(withUploadedVideos(ai, [join(dir, "nope.txt")], async () => {})).rejects.toThrow(
+      "Unsupported video format",
+    );
+    expect(deleted).toEqual([]);
+  });
+
+  test("no paths is a pass-through", async () => {
+    const { ai, deleted } = makeStub();
+    const result = await withUploadedVideos(ai, [], async (files) => files.length);
+    expect(result).toBe(0);
+    expect(deleted).toEqual([]);
+  });
+});
+
+// ── extractGroundingInfo: web + image chunk variants ─────────────────
+
+describe("extractGroundingInfo", () => {
+  test("maps BOTH web and image-search chunk variants", () => {
+    const info = extractGroundingInfo({
+      groundingChunks: [
+        { web: { uri: "https://a.example", title: "A" } },
+        { image: { sourceUri: "https://img.example/page", title: "Img page" } },
+      ],
+      webSearchQueries: ["q1"],
+      searchEntryPoint: { renderedContent: "<style>x</style>" },
+    });
+    expect(info?.chunks).toEqual([
+      { uri: "https://a.example", title: "A" },
+      { uri: "https://img.example/page", title: "Img page" },
+    ]);
+    expect(info?.searchQueries).toEqual(["q1"]);
+    expect(info?.searchEntryPointHtml).toBe("<style>x</style>");
+  });
+
+  test("chunks without a usable URI are dropped; empty metadata yields undefined", () => {
+    expect(extractGroundingInfo({ groundingChunks: [{}, { web: {} }] })).toBeUndefined();
+    expect(extractGroundingInfo(undefined)).toBeUndefined();
   });
 });
