@@ -2,6 +2,11 @@
 
 All notable changes to this project.
 
+## [0.6.2] - 2026-09-16
+
+### Fixed
+- README's top-level Features section now actually lists the v0.6.x capabilities — video-to-image, thinking-depth control, and web+image grounding previously appeared only in the Advanced Features section at the bottom of the page, making the headline features invisible on the repo and npm pages.
+
 ## [0.6.1] - 2026-09-16
 
 ### Fixed
