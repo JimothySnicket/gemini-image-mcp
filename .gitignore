@@ -14,3 +14,4 @@ docs/
 
 # Private maintenance-agent brief — local only, never published
 /CLAUDE.md
+tsconfig.tsbuildinfo
