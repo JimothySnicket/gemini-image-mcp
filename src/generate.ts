@@ -414,11 +414,14 @@ export async function generateImage(
   // Build content parts for this turn
   const userParts: Part[] = [];
 
-  // Add input images first if provided (for editing) — read in parallel
+  // Add input images first if provided (for editing). Read sequentially on purpose:
+  // up to 14 images at up to 50MB each, so parallel reads would keep several raw
+  // buffers resident at once on top of the ~1GB of base64 output parts.
   if (params.images?.length) {
     log.info(`Loading ${params.images.length} input image(s)`);
-    const imageParts = await Promise.all(params.images.map(readImageAsInlineData));
-    userParts.push(...imageParts);
+    for (const imagePath of params.images) {
+      userParts.push(await readImageAsInlineData(imagePath));
+    }
   }
 
   // Video-to-image input (3.1-flash family): one-shot by design — sessions are
