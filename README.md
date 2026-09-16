@@ -41,14 +41,16 @@ npx @jimothy-snicket/gemini-image-mcp --init --local
 ### generate_image — AI-powered
 - **Text-to-image** — describe what you want, get an image
 - **Image editing** — provide reference images and an editing instruction
+- **Video-to-image** — the model *watches* a video and synthesizes a new image from what it understood: YouTube thumbnails, posters from footage, summary infographics, style-transferred stills. See [Advanced Features](#advanced-features)
+- **Thinking depth control** — `thinkingLevel: "HIGH"` for renders that depend on reasoning (infographics, diagrams, dense typography); cheap `MINIMAL` default otherwise
 - **Transparent assets in one call** — `removeBackground` returns a clean transparent PNG: a local AI matte (works on any subject; optional add-on, see below) by default, or built-in green-screen / white-threshold keying. No extra API cost
 - **Multi-turn edits** — pass a `sessionId` to refine an image across calls, with prior turns kept as context
-- **Multi-image input** — up to ~14 reference images on gemini-3.1-flash-image (~11 on gemini-3-pro-image)
+- **Multi-image input** — reference images for editing and character/style consistency (per-model limits; the API enforces)
 - **Cost reporting** — every response includes token counts, estimated USD cost, and session totals
 - **Rate limiting** — configurable per-hour caps on requests and cost to prevent runaway agents
 - **Auto model discovery** — detects available image models from your API key at startup
 - **Seed** — reproducible generation with integer seeds
-- **Google Search grounding** — real-world accuracy on the gemini-3.x image models
+- **Search grounding** — ground renders in live Google Search results; `"web+image"` also pulls image-search results for mood boards and trend references, with sources returned for attribution. See [Advanced Features](#advanced-features)
 
 ### process_image — Local (free, no API calls)
 - **Crop** — pixel-exact, aspect ratio (center), or focal point (attention/entropy)
