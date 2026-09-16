@@ -8,6 +8,8 @@ All notable changes to this project.
 - **Default model is now `gemini-3.1-flash-lite-image`** (Nano Banana 2 Lite) — the new cheapest GA tier (~$0.034 per 1K image, 1K output). The previous default, `gemini-2.5-flash-image`, shuts down 2026-10-02; it remains selectable until then. Existing configs that set `defaultModel` explicitly are unaffected.
 - Pricing table: added `gemini-3.1-flash-lite-image` ($0.25/M input, $1.50/M text+thinking, $30/M image output); removed the retired `-preview` aliases (they fell out of Google's rotation 2026-06-25 and now report cost as "unknown" rather than a stale figure); re-verified all rates against the live pricing page (`PRICING_VERIFIED_DATE` 2026-09-16).
 - Tool descriptions and the config template now list the Lite model and its 1K-only resolution.
+- `sharp` 0.34.5 → 0.35.4 (with a type-import fix: 0.35's ESM declarations export `Sharp` as a named interface) and `@types/node` 26 — verified with a clean-resolve build + test and a live BiRefNet matte.
+- Dependency reality documented: the tree has run `zod` 4.4.3 (un-pinned, direct dep + `overrides` consistent) since June with green CI; runtime schema interop with the current MCP SDK re-verified over the MCP protocol on 2026-09-16.
 
 ### Notes
 - **Billing is required.** Free-tier API keys get `429 RESOURCE_EXHAUSTED` (quota limit 0) on every image model — this is now called out in the README's setup section.

@@ -7,8 +7,3 @@ updates:
     open-pull-requests-limit: 5
     labels:
       - "dependencies"
-    ignore:
-      # Pinned to 3.25.76 (direct dep + overrides): the MCP SDK's AnySchema
-      # (zod/v4/core) rejects zod v4 classic types. Bumping needs a deliberate
-      # schema migration, not a Dependabot PR. See repo maintenance notes.
-      - dependency-name: "zod"
