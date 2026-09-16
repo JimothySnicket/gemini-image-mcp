@@ -2,18 +2,24 @@
 
 All notable changes to this project.
 
-## [0.5.1] - 2026-09-16
+## [0.6.0] - 2026-09-16
+
+### Added
+- **Video-to-image input** — `generate_image` accepts `videos` (local files, up to 3 per call, max 500MB each) on the gemini-3.1-flash family: thumbnails, posters, and summary frames from a video. Videos are uploaded via the Files API, polled until processed, and deleted after the call. Not combinable with `sessionId`.
+- **`thinkingLevel` parameter** — `"MINIMAL"` (default, fast/cheap) or `"HIGH"` for renders that depend on reasoning (infographics, diagrams, dense typography). Also settable as a project default via `defaults.generate.thinkingLevel`.
+- **`grounding` parameter** — `"web"` replaces the `useSearchGrounding` boolean (kept as a legacy alias); `"web+image"` adds image-search results, exclusive to `gemini-3.1-flash-image`. Grounded responses now include a `grounding` object with source chunks, search queries, and `searchEntryPointHtml` (Google ToS requires displaying it with grounded results).
+- README "Advanced Features" section documenting all three (kept out of the tool schema to hold agent context down).
 
 ### Changed
 - **Default model is now `gemini-3.1-flash-lite-image`** (Nano Banana 2 Lite) — the new cheapest GA tier (~$0.034 per 1K image, 1K output). The previous default, `gemini-2.5-flash-image`, shuts down 2026-10-02; it remains selectable until then. Existing configs that set `defaultModel` explicitly are unaffected.
 - Pricing table: added `gemini-3.1-flash-lite-image` ($0.25/M input, $1.50/M text+thinking, $30/M image output); removed the retired `-preview` aliases (they fell out of Google's rotation 2026-06-25 and now report cost as "unknown" rather than a stale figure); re-verified all rates against the live pricing page (`PRICING_VERIFIED_DATE` 2026-09-16).
-- Tool descriptions and the config template now list the Lite model and its 1K-only resolution.
+- Tool descriptions and the config template now list the Lite model and its 1K-only resolution; reference-image limits updated to the per-model doc figures.
 - `sharp` 0.34.5 → 0.35.4 (with a type-import fix: 0.35's ESM declarations export `Sharp` as a named interface) and `@types/node` 26 — verified with a clean-resolve build + test and a live BiRefNet matte.
 - Dependency reality documented: the tree has run `zod` 4.4.3 (un-pinned, direct dep + `overrides` consistent) since June with green CI; runtime schema interop with the current MCP SDK re-verified over the MCP protocol on 2026-09-16.
 
 ### Notes
 - **Billing is required.** Free-tier API keys get `429 RESOURCE_EXHAUSTED` (quota limit 0) on every image model — this is now called out in the README's setup section.
-- Verified live 2026-09-16: generation on `gemini-3.1-flash-lite-image` (1K) and `gemini-3.1-flash-image` (512 + search grounding) through the server's own request path, and a one-call transparent-asset generation (`gemini-2.5-flash-image` + `auto` matte).
+- Verified live 2026-09-16: generation on `gemini-3.1-flash-lite-image` (1K), `gemini-3.1-flash-image` (512 + web grounding), a one-call transparent-asset generation (`gemini-2.5-flash-image` + `auto` matte), plus all three new features (video-to-image on Lite, `thinkingLevel: "HIGH"` on 3.1-flash, `web+image` grounding with entry-point passthrough).
 
 ## [0.5.0] - 2026-06-16
 

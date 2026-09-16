@@ -100,6 +100,30 @@ describe("buildGenerateConfig", () => {
     expect(c.tools).toEqual([{ googleSearch: {} }]);
   });
 
+  test("grounding 'web' attaches the plain googleSearch tool", () => {
+    const c = buildGenerateConfig({ grounding: "web" }, { needsTextMode: false });
+    expect(c.tools).toEqual([{ googleSearch: {} }]);
+  });
+
+  test("grounding 'web+image' enables image + web search types", () => {
+    const c = buildGenerateConfig({ grounding: "web+image" }, { needsTextMode: false });
+    expect(c.tools).toEqual([{ googleSearch: { searchTypes: { imageSearch: {}, webSearch: {} } } }]);
+  });
+
+  test("explicit grounding wins over the deprecated boolean", () => {
+    const c = buildGenerateConfig({ grounding: "web+image", useSearchGrounding: false }, { needsTextMode: false });
+    expect(c.tools).toEqual([{ googleSearch: { searchTypes: { imageSearch: {}, webSearch: {} } } }]);
+  });
+
+  test("thinkingLevel maps into thinkingConfig; absent means no thinkingConfig key", () => {
+    expect(
+      buildGenerateConfig({ thinkingLevel: "HIGH" }, { needsTextMode: false }).thinkingConfig,
+    ).toEqual({ thinkingLevel: "HIGH" });
+    expect(
+      buildGenerateConfig({}, { needsTextMode: false }).thinkingConfig,
+    ).toBeUndefined();
+  });
+
   test("no grounding => no tools key", () => {
     expect(buildGenerateConfig({ useSearchGrounding: false }, { needsTextMode: false }).tools).toBeUndefined();
     expect(buildGenerateConfig({}, { needsTextMode: false }).tools).toBeUndefined();

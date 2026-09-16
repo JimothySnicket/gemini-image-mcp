@@ -10,6 +10,7 @@ import type { RemoveBgOptions } from "./background.js";
 export interface GenerateDefaults {
   aspectRatio?: string;
   resolution?: string;
+  thinkingLevel?: "MINIMAL" | "HIGH";
   removeBackground?: RemoveBgOptions;
 }
 
@@ -369,6 +370,8 @@ export const CONFIG_TEMPLATE = `{
       // "resolution": "1K",
       // Resolution: 512 (gemini-3.1-flash only), 1K, 2K, 4K (gemini-3.1-flash / 3-pro);
       // gemini-3.1-flash-lite and gemini-2.5-flash are 1K only
+      // Thinking depth for text/diagram-heavy renders (gemini-3.1-flash family):
+      // "thinkingLevel": "HIGH",
       // Always return a transparent cutout (opt-in). 'auto' = local AI matte, any subject:
       // "removeBackground": { "mode": "auto" }
     },

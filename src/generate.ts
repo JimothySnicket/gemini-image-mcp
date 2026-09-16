@@ -26,9 +26,24 @@ const MIME_TYPES: Record<string, string> = {
   ".bmp": "image/bmp",
 };
 
+// Video formats the Files API accepts for video-to-image input (3.1-flash family).
+const VIDEO_MIME_TYPES: Record<string, string> = {
+  ".mp4": "video/mp4",
+  ".mpeg": "video/mpeg",
+  ".mpg": "video/mpeg",
+  ".mov": "video/quicktime",
+  ".avi": "video/x-msvideo",
+  ".webm": "video/webm",
+  ".wmv": "video/x-ms-wmv",
+  ".flv": "video/x-flv",
+  ".3gp": "video/3gpp",
+  ".3gpp": "video/3gpp",
+};
+
 export interface GenerateImageParams {
   prompt: string;
   images?: string[];
+  videos?: string[];
   model?: string;
   aspectRatio?: string;
   resolution?: string;
@@ -37,8 +52,19 @@ export interface GenerateImageParams {
   subfolder?: string;
   sessionId?: string;
   seed?: number;
+  /** @deprecated Kept for back-compat; `grounding: "web"` is equivalent. */
   useSearchGrounding?: boolean;
+  /** Search grounding mode. "web" = Google Search; "web+image" adds image results (3.1-flash only). */
+  grounding?: "web" | "web+image";
+  /** Thinking depth (3.1-flash family). Default MINIMAL keeps cost/latency down; HIGH for text/diagram-heavy renders. */
+  thinkingLevel?: "MINIMAL" | "HIGH";
   removeBackground?: RemoveBgOptions;
+}
+
+export interface GroundingInfo {
+  chunks: { uri?: string; title?: string }[];
+  searchQueries: string[];
+  searchEntryPointHtml?: string;
 }
 
 export interface GenerateImageResult {
@@ -52,6 +78,7 @@ export interface GenerateImageResult {
   backgroundRemoved?: boolean;
   operations?: string[];
   warning?: string;
+  grounding?: GroundingInfo;
 }
 
 // Bare-name fragments that mark a model as image-capable. The API exposes no
@@ -86,13 +113,19 @@ export function isUsableImageModel(model: DiscoverableModel): boolean {
  * Assemble the `config` object for ai.models.generateContent from request params.
  * Pure and exported for unit testing — no live-client dependency.
  * - responseModalities: IMAGE-only for single-shot text-to-image (prevents text-only
- *   responses); TEXT+IMAGE when editing with input images or continuing a session
+ *   responses); TEXT+IMAGE when editing with inputs or continuing a session
  *   (the model must read the instruction and preserve thoughtSignature history).
  * - aspectRatio/resolution map into imageConfig (omitted entirely when empty).
- * - useSearchGrounding attaches the googleSearch tool; the API decides support.
+ * - grounding: "web" attaches the googleSearch tool; "web+image" adds image-search
+ *   results via searchTypes (3.1-flash only; the API rejects it elsewhere). The
+ *   deprecated useSearchGrounding boolean maps to "web" when grounding is unset.
+ * - thinkingLevel maps into thinkingConfig (3.1-flash family; API validates).
  */
 export function buildGenerateConfig(
-  params: Pick<GenerateImageParams, "aspectRatio" | "resolution" | "seed" | "useSearchGrounding">,
+  params: Pick<
+    GenerateImageParams,
+    "aspectRatio" | "resolution" | "seed" | "useSearchGrounding" | "grounding" | "thinkingLevel"
+  >,
   opts: { needsTextMode: boolean },
 ): Record<string, unknown> {
   const imageConfig: Record<string, string> = {};
@@ -104,7 +137,17 @@ export function buildGenerateConfig(
   };
   if (Object.keys(imageConfig).length > 0) generateConfig.imageConfig = imageConfig;
   if (params.seed !== undefined) generateConfig.seed = params.seed;
-  if (params.useSearchGrounding) generateConfig.tools = [{ googleSearch: {} }];
+
+  const grounding = params.grounding ?? (params.useSearchGrounding ? "web" : undefined);
+  if (grounding === "web+image") {
+    generateConfig.tools = [{ googleSearch: { searchTypes: { imageSearch: {}, webSearch: {} } } }];
+  } else if (grounding === "web") {
+    generateConfig.tools = [{ googleSearch: {} }];
+  }
+
+  if (params.thinkingLevel) {
+    generateConfig.thinkingConfig = { thinkingLevel: params.thinkingLevel };
+  }
   return generateConfig;
 }
 
@@ -211,6 +254,61 @@ async function readImageAsInlineData(
   };
 }
 
+interface UploadedFile {
+  name?: string;
+  uri?: string;
+  mimeType?: string;
+  state?: string;
+}
+
+/**
+ * Upload a local video to the Files API and wait for it to finish server-side
+ * processing (uploads land in PROCESSING and only become usable when ACTIVE).
+ * Callers MUST delete the returned file name afterwards (best-effort) so
+ * uploads don't linger in the user's Files API storage.
+ */
+async function uploadVideoAndWait(ai: GoogleGenAI, filepath: string): Promise<UploadedFile> {
+  const ext = extname(filepath).toLowerCase();
+  const mimeType = VIDEO_MIME_TYPES[ext];
+  if (!mimeType) {
+    throw new Error(
+      `Unsupported video format "${ext}" for file: ${filepath}. ` +
+        `Supported: ${Object.keys(VIDEO_MIME_TYPES).join(", ")}`,
+    );
+  }
+
+  const MAX_VIDEO_SIZE = 500 * 1024 * 1024; // keep well under the Files API 2GB cap
+  let fileStat;
+  try {
+    fileStat = await stat(filepath);
+  } catch (err) {
+    const msg = err instanceof Error ? err.message : String(err);
+    throw new Error(`Failed to read video file "${filepath}": ${msg}`);
+  }
+  if (fileStat.size > MAX_VIDEO_SIZE) {
+    throw new Error(
+      `Video file is ${Math.round(fileStat.size / 1024 / 1024)}MB, max is 500MB.`,
+    );
+  }
+
+  const uploaded = (await ai.files.upload({ file: filepath, config: { mimeType } })) as UploadedFile;
+  let file = uploaded;
+  const deadline = Date.now() + 120_000;
+  while (file.state !== "ACTIVE") {
+    if (file.state === "FAILED") {
+      throw new Error(`Video "${filepath}" failed processing on the Files API (state FAILED).`);
+    }
+    if (Date.now() > deadline) {
+      throw new Error(
+        `Timed out (120s) waiting for video "${filepath}" to become ACTIVE on the Files API.`,
+      );
+    }
+    await new Promise((r) => setTimeout(r, 2000));
+    file = (await ai.files.get({ name: uploaded.name! })) as UploadedFile;
+  }
+  return file;
+}
+
 export async function generateImage(
   params: GenerateImageParams,
 ): Promise<GenerateImageResult> {
@@ -247,6 +345,25 @@ export async function generateImage(
     for (const imagePath of params.images) {
       const inlineDataPart = await readImageAsInlineData(imagePath);
       userParts.push(inlineDataPart);
+    }
+  }
+
+  // Video-to-image input (3.1-flash family): upload via the Files API and reference
+  // by URI. Not combinable with sessions — session history is text+image only.
+  // Uploads are deleted best-effort in the finally around the API call below.
+  const uploadedVideos: UploadedFile[] = [];
+  if (params.videos?.length) {
+    if (params.sessionId) {
+      throw new Error(
+        "videos cannot be combined with sessionId — start a fresh request for video-to-image.",
+      );
+    }
+    log.info(`Uploading ${params.videos.length} input video(s)`);
+    for (const videoPath of params.videos) {
+      uploadedVideos.push(await uploadVideoAndWait(ai, videoPath));
+    }
+    for (const file of uploadedVideos) {
+      userParts.push({ fileData: { fileUri: file.uri!, mimeType: file.mimeType! } });
     }
   }
 
@@ -289,8 +406,9 @@ export async function generateImage(
   // attached just before the call below.
   const isSession = !!(sessionId && sessions.has(sessionId));
   const hasInputImages = !!(params.images?.length);
+  const hasVideos = uploadedVideos.length > 0;
   const generateConfig = buildGenerateConfig(params, {
-    needsTextMode: isSession || hasInputImages,
+    needsTextMode: isSession || hasInputImages || hasVideos,
   });
 
   const startTime = Date.now();
@@ -320,6 +438,15 @@ export async function generateImage(
     throw new Error(`Gemini API error: ${msg}`);
   } finally {
     clearTimeout(timeout);
+    // Uploaded videos are only needed for the duration of the call — delete them
+    // from Files API storage best-effort (the generation itself already ran or failed).
+    for (const file of uploadedVideos) {
+      if (file.name) {
+        ai.files.delete({ name: file.name }).catch((err: unknown) => {
+          log.debug(`[video] failed to delete uploaded file ${file.name}:`, String(err));
+        });
+      }
+    }
   }
 
   const elapsed = Date.now() - startTime;
@@ -399,6 +526,23 @@ export async function generateImage(
     );
   }
 
+  // Surface grounding provenance when search grounding was used. Google's ToS require
+  // displaying the search suggestions entry point when grounding results are shown, so
+  // searchEntryPointHtml (render-ready HTML) is passed through for the client to display.
+  const groundingMeta = response.candidates?.[0]?.groundingMetadata;
+  let grounding: GroundingInfo | undefined;
+  if (groundingMeta) {
+    const chunks = (groundingMeta.groundingChunks ?? [])
+      .map((c) => ({ uri: c.web?.uri, title: c.web?.title }))
+      .filter((c) => c.uri)
+      .slice(0, 5);
+    const searchQueries = (groundingMeta.webSearchQueries ?? []).slice(0, 5);
+    const searchEntryPointHtml = groundingMeta.searchEntryPoint?.renderedContent;
+    if (chunks.length || searchQueries.length || searchEntryPointHtml) {
+      grounding = { chunks, searchQueries, searchEntryPointHtml };
+    }
+  }
+
   // Optional one-call background removal → transparent PNG. Runs locally on the
   // generated image and NEVER discards a paid generation: applyOptionalBackgroundRemoval
   // falls back to the opaque image with a warning if removal throws.
@@ -438,6 +582,7 @@ export async function generateImage(
     resolution: params.resolution,
     subfolder: params.subfolder,
     inputImages: params.images?.length ?? 0,
+    inputVideos: params.videos?.length ?? 0,
     usage,
   });
 
@@ -452,5 +597,6 @@ export async function generateImage(
     backgroundRemoved: backgroundRemoved || undefined,
     operations: operations.length ? operations : undefined,
     warning,
+    grounding,
   };
 }

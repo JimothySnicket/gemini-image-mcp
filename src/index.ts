@@ -38,7 +38,8 @@ server.registerTool(
       "Provide just a prompt for text-to-image generation. " +
       "Add image file paths to edit or use reference images. " +
       "Set removeBackground to get a transparent PNG cutout in one call (local AI matte; works on any subject, no extra API cost). " +
-      "Returns the saved file path, model used, token counts, and estimated cost.",
+      "Returns the saved file path, model used, token counts, and estimated cost. " +
+      "Advanced inputs (video-to-image, thinking depth, image-search grounding): see the README's Advanced Features section.",
     inputSchema: {
       prompt: z
         .string()
@@ -49,7 +50,13 @@ server.registerTool(
         .optional(z.array(z.string()).max(14))
         .describe(
           "File paths to input/reference images for editing. Omit for text-to-image generation. " +
-            "Max references vary by model (gemini-3.1-flash-image ~14, gemini-3-pro-image ~11).",
+            "Per-model reference limits vary (gemini-3.1-flash-lite-image up to 14; others less) — the API enforces.",
+        ),
+      videos: z
+        .optional(z.array(z.string()).max(3))
+        .describe(
+          "File paths to input videos (mp4/mov/webm/etc, max 500MB each) for video-to-image: thumbnails, posters, " +
+            "summary frames. Uploaded via the Files API per call. gemini-3.1-flash family only; not combinable with sessionId.",
         ),
       model: z
         .optional(z.string())
@@ -97,8 +104,20 @@ server.registerTool(
       useSearchGrounding: z
         .optional(z.boolean())
         .describe(
-          "Enable Google Search grounding for real-world accuracy. Supported on the gemini-3.x " +
-            "image models; the API rejects it on models that don't support it.",
+          "Legacy alias for grounding: 'web'. Prefer the grounding parameter.",
+        ),
+      grounding: z
+        .optional(z.enum(["web", "web+image"]))
+        .describe(
+          "Search grounding. 'web' = Google Search for real-world accuracy. 'web+image' adds image results " +
+            "(gemini-3.1-flash-image only; response includes searchEntryPointHtml which ToS requires displaying). " +
+            "Not supported on gemini-3.1-flash-lite-image.",
+        ),
+      thinkingLevel: z
+        .optional(z.enum(["MINIMAL", "HIGH"]))
+        .describe(
+          "Thinking depth (gemini-3.1-flash family). Default MINIMAL = fast/cheap. Use HIGH for text-heavy " +
+            "or diagram/infographic renders.",
         ),
       removeBackground: z
         .optional(
@@ -136,6 +155,7 @@ server.registerTool(
       const result = await generateImage({
         prompt: args.prompt,
         images: args.images,
+        videos: args.videos,
         model: args.model,
         aspectRatio: args.aspectRatio ?? config.defaults.generate.aspectRatio,
         resolution: args.resolution ?? config.defaults.generate.resolution,
@@ -145,6 +165,8 @@ server.registerTool(
         sessionId: args.sessionId,
         seed: args.seed,
         useSearchGrounding: args.useSearchGrounding,
+        grounding: args.grounding,
+        thinkingLevel: args.thinkingLevel ?? config.defaults.generate.thinkingLevel,
         removeBackground: args.removeBackground ?? config.defaults.generate.removeBackground,
       });
 

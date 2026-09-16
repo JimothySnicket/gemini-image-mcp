@@ -14,6 +14,7 @@ export interface ManifestEntry {
   resolution?: string;
   subfolder?: string;
   inputImages: number;
+  inputVideos?: number;
   usage: UsageReport;
 }
 

@@ -144,12 +144,20 @@ Structure prompts as: **[Style] [Subject] [Composition] [Context/Atmosphere]**
 
 ## Models
 
-- `gemini-3.1-flash-lite-image` (default) — cheapest (~$0.034/image), 1K.
-- `gemini-3.1-flash-image` — speed + quality, Google Search grounding, 512–4K (~$0.07/1K image).
-- `gemini-3-pro-image` — best quality, text rendering, up to 4K, ~11 reference images (~$0.13/1K image).
+- `gemini-3.1-flash-lite-image` (default) — cheapest (~$0.034/image), 1K. No search grounding; prefer 3.1-flash for multi-image edits and multi-turn sessions.
+- `gemini-3.1-flash-image` — speed + quality, search grounding (web + image), video input, 512–4K (~$0.07/1K image).
+- `gemini-3-pro-image` — best quality, text rendering, up to 4K (~$0.13/1K image).
 - `gemini-2.5-flash-image` — legacy, 1K. Shuts down 2026-10-02.
 
 Use the GA IDs above; the `-preview` IDs retired 2026-06-25. The server validates the model against whatever your API key supports. Image generation requires a billing-enabled API key — free-tier keys get 429 on every image model.
+
+## Advanced Features
+
+Use these only when the task calls for them:
+
+- **Video-to-image** (`videos: ["./clip.mp4"]`) — thumbnails, posters, or summary frames from a video. gemini-3.1-flash family only; not with `sessionId`. Only with videos the user has rights to.
+- **Thinking depth** (`thinkingLevel: "HIGH"`) — for infographics, diagrams, menus, or dense typography where the render depends on reasoning. Default MINIMAL is fine for everything else (and cheaper).
+- **Search grounding** (`grounding`) — `"web"` for current facts (weather, charts, news); `"web+image"` (3.1-flash only) for mood boards and visual trend references. When a response includes a `grounding` object, show the user its sources — and display `searchEntryPointHtml` when presenting grounded results (Google ToS requirement). Not supported on the default Lite model — switch to `gemini-3.1-flash-image`.
 
 ## Important
 

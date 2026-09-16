@@ -243,7 +243,10 @@ Models with no entry (built-in or override) still generate — their cost is rep
 | `subfolder` | No | Subfolder within output directory (e.g. `landing-page`) |
 | `sessionId` | No | Continue a multi-turn editing session from a previous response |
 | `seed` | No | Integer seed for reproducible generation |
-| `useSearchGrounding` | No | Enable Google Search grounding (gemini-3.x image models) |
+| `grounding` | No | `"web"` = Google Search grounding; `"web+image"` adds image-search results (gemini-3.1-flash-image only). See [Advanced Features](#advanced-features) |
+| `useSearchGrounding` | No | Legacy alias for `grounding: "web"` |
+| `thinkingLevel` | No | `"MINIMAL"` (default) or `"HIGH"` — thinking depth on the gemini-3.1-flash family. See [Advanced Features](#advanced-features) |
+| `videos` | No | Array of file paths to input videos for video-to-image (gemini-3.1-flash family). See [Advanced Features](#advanced-features) |
 | `removeBackground` | No | Return a transparent PNG cutout. `{ "mode": "auto" }` = local AI matte (any subject; default); `{ "mode": "chroma" }` = green screen; `{ "mode": "threshold" }` = white removal (line art). No extra API cost |
 
 ### Example Response
@@ -390,13 +393,52 @@ process_image → crop {aspectRatio: "16:9", strategy: "attention"} + resize {wi
 process_image → format: "webp" + quality: 85
 ```
 
+## Advanced Features
+
+These are opt-in knobs on `generate_image`. Most requests don't need them — they're documented here rather than in the tool schema to keep agent context small.
+
+### Video-to-image (`videos`)
+
+Generate an image *from* a video: thumbnails, movie posters, summary frames, infographics.
+
+```json
+{
+  "prompt": "A bold movie poster for this video, dramatic typography",
+  "videos": ["./clip.mp4"],
+  "model": "gemini-3.1-flash-image"
+}
+```
+
+- Supported on the **gemini-3.1-flash family** (`gemini-3.1-flash-image`, `gemini-3.1-flash-lite-image`); other models reject it.
+- Accepts local files (`mp4`, `mov`, `webm`, `avi`, `mpeg`, `wmv`, `flv`, `3gpp`), max 500MB each, up to 3 per call. Each video is uploaded to Google's Files API, polled until processed, used for the call, then deleted. Video tokens count as input (a 2s clip ≈ 140 tokens).
+- **Not combinable with `sessionId`** — sessions are text+image only.
+- You must have the necessary rights to any video you upload.
+
+### Thinking depth (`thinkingLevel`)
+
+All Gemini 3 image models "think" before rendering. The default `MINIMAL` keeps cost and latency down. Use `"HIGH"` for renders where quality depends on reasoning: infographics, diagrams, menus, dense typography, multi-step compositions.
+
+```json
+{ "prompt": "An infographic explaining the water cycle with labeled diagrams", "thinkingLevel": "HIGH" }
+```
+
+Supported on the gemini-3.1-flash family (API validates elsewhere). Can be set as a project default via `defaults.generate.thinkingLevel` in the config file.
+
+### Image-search grounding (`grounding: "web+image"`)
+
+`grounding: "web"` grounds the render in live Google Search results (weather, stock charts, current events). `"web+image"` — exclusive to `gemini-3.1-flash-image` — also pulls in image-search results, useful for mood boards and trend references.
+
+When grounding is used, the response includes a `grounding` object: source `chunks` (URI + title, up to 5), `searchQueries`, and `searchEntryPointHtml`. **Google's Terms of Service require displaying the search suggestions entry point when you show grounded results** — pass `searchEntryPointHtml` through to the user (it is render-ready HTML provided by Google for exactly this purpose).
+
+Not supported on `gemini-3.1-flash-lite-image` (the API rejects grounding there).
+
 ## Models
 
 | Model | Strengths | Resolution | Notes |
 |-------|-----------|------------|-------|
-| `gemini-3.1-flash-lite-image` | Cheapest (~$0.034/image) | 1K | **Default** (Nano Banana 2 Lite) |
-| `gemini-3.1-flash-image` | Speed + quality, Google Search grounding | 512, 1K, 2K, 4K | ~$0.07/1K image. ~14 reference images |
-| `gemini-3-pro-image` | Best quality, text rendering | 1K, 2K, 4K | ~$0.13/1K image. ~11 reference images |
+| `gemini-3.1-flash-lite-image` | Cheapest (~$0.034/image) | 1K | **Default** (Nano Banana 2 Lite). No search grounding; up to 14 reference images but not optimized for multi-image or multi-turn editing — prefer 3.1-flash for those |
+| `gemini-3.1-flash-image` | Speed + quality, search grounding (web + image), video input | 512, 1K, 2K, 4K | ~$0.07/1K image. Up to 10 object + 4 character + 3 style reference images |
+| `gemini-3-pro-image` | Best quality, text rendering | 1K, 2K, 4K | ~$0.13/1K image. Up to 6 object + 5 character reference images |
 | `gemini-2.5-flash-image` | Legacy | 1K | Shuts down 2026-10-02 |
 
 The retired `-preview` IDs (`gemini-3-pro-image-preview`, `gemini-3.1-flash-image-preview`) may still appear in your key's model list but were retired 2026-06-25 — use the GA IDs above. The server discovers whichever image models your API key supports at startup and validates each request against that live list, so new models work without an update.
